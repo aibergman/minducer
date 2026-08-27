@@ -22,6 +22,7 @@ from .induced import InducedMomentResponse, InducedResponseResult, SublatticeCla
 from .io_uppasd import InputFormatError, LoadedUppASD, load_uppasd, parse_inpsd
 from .magnons import FMSpinWaveResult, SpinStiffnessResult, fit_spin_stiffness, fm_magnon_spectrum
 from .model import ExchangeBond, MagneticCrystal, MagneticSite, UnitMetadata, ValidationReport
+from .provenance import build_analysis_provenance
 from .reciprocal import (
     ExchangeEigenSystem,
     ExchangePathData,
@@ -419,8 +420,38 @@ def _write_matrix_csv(path: Path, q: np.ndarray, matrices: np.ndarray, prefix: s
 def _write_exports(session: AnalysisSession) -> None:
     target = Path(tempfile.mkdtemp(prefix="imx_results_"))
     session.export_dir = target
-    summary = {"model": _model_dict(session.loaded.model), "validation_report": session.loaded.report.as_dict(), "classification": {"robust": list(session.robust_sites), "induced": list(session.induced_sites)}, "q_fractional": session.q_fractional.tolist(), "warnings": list(dict.fromkeys(session.warnings))}
+    response = session.response
+    x_values = None
+    x_source = "not_applicable"
+    response_mode = None
+    if response is not None:
+        response_mode = response.mode
+        x_source = "inferred from reference collinear state" if response._x_input is None else "user supplied override"
+        try:
+            x_values = response._resolve_x(session.inference if response._x_input is None else None)
+        except (ValueError, np.linalg.LinAlgError):
+            session.warnings.append("X values were not resolved for provenance because inference/override validation failed")
+    provenance = build_analysis_provenance(
+        units={"energy": session.loaded.model.units.energy, "length": session.loaded.model.units.length, "moment": session.loaded.model.units.moment},
+        robust_sites=session.robust_sites,
+        induced_sites=session.induced_sites,
+        q_fractional=session.q_fractional,
+        q_cartesian=session.q_cartesian,
+        mode=response_mode,
+        x_source=x_source,
+        x_values=x_values,
+        numerical_tolerances={
+            "fourier_atol": 1e-10,
+            "fourier_rtol": 1e-8,
+            "ordering_gamma_tolerance": 1e-10,
+            "response_condition_limit": None if response is None else response.condition_limit,
+            "response_singular_tolerance": None if response is None else response.singular_tolerance,
+            "goldstone_relative_tolerance": 1e-8,
+        },
+    )
+    summary = {"model": _model_dict(session.loaded.model), "validation_report": session.loaded.report.as_dict(), "classification": {"robust": list(session.robust_sites), "induced": list(session.induced_sites)}, "q_fractional": session.q_fractional.tolist(), "warnings": list(dict.fromkeys(session.warnings)), "analysis_provenance": provenance}
     (target / "canonical_model.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    (target / "analysis_provenance.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
     (target / "validation_report.json").write_text(json.dumps(session.loaded.report.as_dict(), indent=2), encoding="utf-8")
     _write_matrix_csv(target / "raw_jq.csv", session.q_fractional, session.raw_fourier.matrices)
     if session.downfolding is not None:

@@ -80,6 +80,7 @@ from .magnons import (
     spin_wave_spectrum,
 )
 from .units import convert_energy, energy_conversion_factor, normalise_energy_unit
+from .provenance import HAMILTONIAN_CONVENTION, K_APPROXIMATION, build_analysis_provenance
 from .comparison import (
     DatasetAnalysis,
     DatasetComparison,
@@ -174,6 +175,9 @@ __all__ = [
     "magnon_path_data",
     "plot_magnon_path",
     "normalise_energy_unit",
+    "HAMILTONIAN_CONVENTION",
+    "K_APPROXIMATION",
+    "build_analysis_provenance",
     "DatasetAnalysis",
     "DatasetComparison",
     "DatasetCompatibility",

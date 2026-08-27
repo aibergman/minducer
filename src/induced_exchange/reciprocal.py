@@ -421,7 +421,10 @@ def ordering_analysis(
         return OrderingAnalysis(None, None, None, None, None, None, None, (), eigensystem.hermiticity)
     leading = eigensystem.eigenvalues[:, 0]
     order_index = int(np.argmax(leading.real))
-    gamma_distances = np.linalg.norm(eigensystem.q_cartesian, axis=1)
+    # Identify Gamma in reduced coordinates modulo reciprocal lattice
+    # vectors. Using |q_cartesian| would incorrectly reject q=(1,0,0),
+    # although it is the same point as q=(0,0,0).
+    gamma_distances = np.linalg.norm(eigensystem.q_fractional - np.rint(eigensystem.q_fractional), axis=1)
     gamma_candidates = np.flatnonzero(gamma_distances <= gamma_tolerance)
     gamma_index: int | None = int(gamma_candidates[0]) if len(gamma_candidates) else None
     gamma_value: complex | None = leading[gamma_index] if gamma_index is not None else None

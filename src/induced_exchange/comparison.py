@@ -27,6 +27,7 @@ from .downfolding import DownfoldingResult, InducedExchangeDownfolding
 from .induced import InducedMomentResponse
 from .magnons import FMSpinWaveResult, SpinStiffnessResult, fm_magnon_spectrum, fit_spin_stiffness
 from .model import MagneticCrystal
+from .provenance import build_analysis_provenance
 from .reciprocal import FourierExchangeResult, exchange_eigensystem, exchange_fourier, reciprocal_lattice
 
 
@@ -676,10 +677,32 @@ class DatasetComparison:
         return self.dataset_b.dressed_eigenvalues
 
     def as_dict(self) -> dict[str, Any]:
+        def provenance(analysis: DatasetAnalysis) -> dict[str, Any]:
+            response = analysis.dataset.induced_response()
+            robust_sites = analysis.dataset.robust_sites or (() if response is None else response.robust_sites)
+            induced_sites = analysis.dataset.induced_sites or (() if response is None else response.induced_sites)
+            x_values = None
+            if response is not None:
+                try:
+                    x_values = response._resolve_x(response.infer_x() if response._x_input is None else None)
+                except (ValueError, np.linalg.LinAlgError):
+                    x_values = None
+            return build_analysis_provenance(
+                units={"energy": analysis.dataset.model.units.energy, "length": analysis.dataset.model.units.length, "moment": analysis.dataset.model.units.moment},
+                robust_sites=robust_sites,
+                induced_sites=induced_sites,
+                q_fractional=self.q_fractional,
+                q_cartesian=self.q_cartesian,
+                mode=None if response is None else response.mode,
+                x_source=("not_applicable" if response is None else ("inferred from reference collinear state" if response._x_input is None else "user supplied override")),
+                x_values=x_values,
+                numerical_tolerances={"fourier_atol": 1e-10, "fourier_rtol": 1e-8, "ordering_gamma_tolerance": 1e-10},
+            )
         return {
             "compatibility": self.compatibility.as_dict(),
             "q_fractional": self.q_fractional.tolist(),
             "q_cartesian": self.q_cartesian.tolist(),
+            "analysis_provenance": {"dataset_a": provenance(self.dataset_a), "dataset_b": provenance(self.dataset_b)},
             "dataset_a": self.dataset_a.as_dict(),
             "dataset_b": self.dataset_b.as_dict(),
             "induced_response": None if self.induced_response is None else self.induced_response.as_dict(),

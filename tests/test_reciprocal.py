@@ -42,6 +42,13 @@ def test_analytic_one_dimensional_nn_ferromagnet_orders_at_gamma():
     assert diagnosis.gamma_locally_stable
 
 
+def test_reciprocal_gamma_is_identified_modulo_integer_reduced_coordinates():
+    model = crystal(np.eye(3), [bond(1, 1, (1, 0, 0), 1), bond(1, 1, (-1, 0, 0), 1)])
+    diagnosis = ordering_analysis(model, [[1.0, 0.0, 0.0], [0.5, 0.0, 0.0]], coordinates="fractional")
+    assert diagnosis.gamma_index == 0
+    assert diagnosis.gamma_locally_stable
+
+
 def test_analytic_one_dimensional_nn_antiferromagnet_orders_at_zone_boundary():
     model = crystal(np.eye(3), [bond(1, 1, (1, 0, 0), -1), bond(1, 1, (-1, 0, 0), -1)])
     q = np.array([[0.0, 0.0, 0.0], [0.5, 0.0, 0.0]])

@@ -335,13 +335,20 @@ class InducedExchangeDownfolding:
                 continue
             try:
                 condition[q_index] = float(np.linalg.cond(matrix))
+                smallest_singular = float(np.min(np.linalg.svd(matrix, compute_uv=False)))
             except np.linalg.LinAlgError:
                 condition[q_index] = np.inf
-            singular[q_index] = not np.isfinite(condition[q_index]) or condition[q_index] >= self.response.condition_limit
+                smallest_singular = 0.0
+            singular[q_index] = (
+                not np.isfinite(condition[q_index])
+                or condition[q_index] >= self.response.condition_limit
+                or smallest_singular <= self.response.singular_tolerance
+            )
             if singular[q_index]:
                 warnings.append(
                     f"q/index {q_index}: I - X K_mm is near singular (condition number "
-                    f"{condition[q_index]:.6g}); dressed exchange is not reliable"
+                    f"{condition[q_index]:.6g}, minimum singular value {smallest_singular:.6g}); "
+                    "dressed exchange is not reliable"
                 )
             try:
                 # This is Xi = (I - X K_mm)^-1 X, the continuous form of

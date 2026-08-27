@@ -192,7 +192,10 @@ class InducedResponseResult:
 
         if self.q_fractional is None:
             return None
-        gamma = np.flatnonzero(np.linalg.norm(self.q_fractional, axis=1) <= 1e-10)
+        # Reciprocal coordinates differing by an integer lattice vector are
+        # equivalent Gamma points. This is important for meshes that use an
+        # endpoint at 1 rather than the half-open [0, 1) convention.
+        gamma = np.flatnonzero(np.linalg.norm(self.q_fractional - np.rint(self.q_fractional), axis=1) <= 1e-10)
         if len(gamma) == 0:
             return None
         with np.errstate(divide="ignore", invalid="ignore"):
@@ -572,15 +575,30 @@ class InducedMomentResponse:
         condition = np.empty(n_q, dtype=float)
         singular = np.zeros(n_q, dtype=bool)
         warnings: list[str] = []
+        if n_ind == 0:
+            # There is no linear system to condition. Treat the empty system
+            # as benign so an explicitly robust-only response is not reported
+            # as singular merely because NumPy cannot condition a 0x0 array.
+            return output, fields, np.ones(n_q, dtype=float), singular, warnings
         for q_index in range(n_q):
             matrix = np.eye(n_ind, dtype=complex) - diagonal_x @ k_mm[q_index]
             try:
                 condition[q_index] = float(np.linalg.cond(matrix))
+                smallest_singular = float(np.min(np.linalg.svd(matrix, compute_uv=False)))
             except np.linalg.LinAlgError:
                 condition[q_index] = np.inf
-            singular[q_index] = not np.isfinite(condition[q_index]) or condition[q_index] >= self.condition_limit
+                smallest_singular = 0.0
+            singular[q_index] = (
+                not np.isfinite(condition[q_index])
+                or condition[q_index] >= self.condition_limit
+                or smallest_singular <= self.singular_tolerance
+            )
             if singular[q_index]:
-                warnings.append(f"q/index {q_index}: I - X K_mm is near singular (condition number {condition[q_index]:.6g}); possible soft/Stoner-like response")
+                warnings.append(
+                    f"q/index {q_index}: I - X K_mm is near singular (condition number "
+                    f"{condition[q_index]:.6g}, minimum singular value {smallest_singular:.6g}); "
+                    "possible soft/Stoner-like response"
+                )
             try:
                 output[q_index] = np.linalg.solve(matrix, diagonal_x @ fields[q_index])
             except np.linalg.LinAlgError:

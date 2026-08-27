@@ -188,6 +188,49 @@ tendency is reported as signed harmonic data only; it is not labelled a
 stable FM spectrum. The stiffness fit is through `E = D |q|^2` and stores the
 user-visible Cartesian reciprocal `q_max` interval.
 
+## Comparing two exchange datasets
+
+IMX-06 adds conservative A/B diagnostics for cases such as LKAG versus
+frozen-magnon `Jij`. The cell, site indices, and Cartesian basis positions are
+checked before comparison; different exchange values are expected. Moment or
+unit differences are retained as visible warnings, and no source is declared
+causally wrong.
+
+```python
+from induced_exchange import ExchangeDataset, compare_exchange_datasets
+
+a = ExchangeDataset(lkag_model, label="LKAG", robust_sites=[1], induced_sites=[2], x=0.5)
+b = ExchangeDataset(frozen_magnon_model, label="frozen magnon", robust_sites=[1], induced_sites=[2], x=0.5)
+comparison = compare_exchange_datasets(a, b, q_points, include_magnons=True, stiffness_q_max=0.1)
+print(*comparison.diagnostics, sep="\n")
+comparison.export("results", prefix="lkag_vs_frozen")
+```
+
+The result contains raw all-rigid, robust-only raw, and dressed `J_eff(q)`
+eigenvalues and ordering vectors; optional raw/robust/dressed FM magnons and
+stiffness; real-space `Jij` rows with authoritative distances and shell
+numbers; and plotting helpers such as `plot_comparison(...,
+observable="dressed")` and `plot_real_space_comparison(...)`. Export writes
+CSV tables plus a JSON summary.
+
+For a coherent robust-site spiral, supply either an `ExternalInducedResponse`
+or a file containing `qx qy qz m_ind`, or a two-column
+`path_coordinate m_ind` table:
+
+```python
+comparison = compare_exchange_datasets(
+    a, b, q_points,
+    robust_configuration=spiral_amplitudes,
+    external_response="dft_induced_response.dat",
+)
+print(comparison.induced_response.metrics_a)
+```
+
+When supplied response data strongly disagree with the `K = J` model, the
+diagnostic says: “The input Jij do not reproduce the supplied induced-moment
+response under the K=J approximation.” This is a model-mismatch statement,
+not a claim that LKAG is wrong.
+
 ## Variational induced-exchange downfolding
 
 IMX-04 uses the same response object to eliminate the induced variables from a

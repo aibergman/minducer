@@ -98,3 +98,47 @@ ordering vector is where the largest eigenvalue of `J(q)` occurs. Fourier
 transforms retain incomplete or asymmetric bond input and report Hermiticity
 violations; they are never silently symmetrized. `path_exchange_data` and the
 `as_dict()`/`to_json()` methods provide plotting and downloadable numeric data.
+
+## Induced/slave moment response
+
+IMX-03 adds an explicit, user-controlled induced-moment layer. Sites are never
+classified from their moment size: pass robust and induced site indices (or
+named sublattice mappings) explicitly.
+
+```python
+from induced_exchange import InducedMomentResponse
+
+response = InducedMomentResponse(
+    loaded.model,
+    robust_sites={"Fe": [1]},
+    induced_sites={"Pt": [2]},
+    mode="j_weighted",
+    # Optional; otherwise inferred from the reference collinear state.
+    x={"Pt": 0.12},
+)
+inference = response.infer_x()
+real_space = response.response_real_space({1: [0.0, 0.0, 1.0]})
+q_space = response.response_q([[0.0, 0.0, 0.0]], [[1.0]])
+```
+
+The `historical` (also called `unweighted`) mode evaluates
+`m_nu = X_nu sum_j M_j` over a first geometric shell by default. Use
+`neighbourhood=[...]`, a mapping per induced site, or `cutoff=...` to select
+another neighbourhood. The `j_weighted` mode evaluates
+
+```text
+m(q) = [I - X K_mm(q)]^-1 X K_mM(q) M(q)
+```
+
+and labels the default `K = J_input` choice throughout the API as the
+**J-weighted induced-response approximation**. Conventional LKAG `Jij` are not
+formally identical to a true induction kernel. `X` is susceptibility-like and
+has the inverse energy dimension implied by the selected input units; it is
+not the induced moment itself. `infer_x()` reports each source field and warns
+about cancellation, suspicious signs, and near-zero denominators.
+
+The response is algebraic and instantaneous. Induced longitudinal amplitudes
+are slave variables, not independent LLG/LSWT degrees of freedom. Both q-space
+and real-space results expose condition numbers and singularity flags for
+`I - X K_mm`; near-singular systems are reported and never silently
+regularized.

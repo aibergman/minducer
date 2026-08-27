@@ -35,6 +35,15 @@ from .reciprocal import (
     reciprocal_mesh,
     regular_q_mesh,
 )
+from .induced import (
+    InducedMomentResponse,
+    InducedResponse,
+    InducedResponseResult,
+    SublatticeClassification,
+    XInference,
+    XInferenceResult,
+    instantaneous_slave_moments,
+)
 
 _IO_EXPORTS = {
     "InputFormatError",
@@ -68,6 +77,13 @@ __all__ = [
     "MagneticSite",
     "UnitMetadata",
     "ValidationReport",
+    "InducedMomentResponse",
+    "InducedResponse",
+    "InducedResponseResult",
+    "SublatticeClassification",
+    "XInference",
+    "XInferenceResult",
+    "instantaneous_slave_moments",
     "ExchangeEigenSystem",
     "ExchangePathData",
     "FourierExchangeResult",

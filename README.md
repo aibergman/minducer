@@ -143,6 +143,51 @@ and real-space results expose condition numbers and singularity flags for
 `I - X K_mm`; near-singular systems are reported and never silently
 regularized.
 
+## Collinear-FM magnons and stiffness
+
+IMX-05 adds the FM-only adiabatic spin-wave layer in
+`induced_exchange.magnons`. For the fixed Hamiltonian convention
+`H = -1/2 sum_ij Jij e_i dot e_j`, the transverse harmonic matrix is
+
+```text
+A(q) = diag(J(0) 1) - J(q)
+```
+
+and the energy-valued, moment-normalized dynamical matrix is
+
+```text
+D(q) = g M^(-1/2) A(q) M^(-1/2).
+```
+
+Here `M` contains the supplied moment magnitudes in `mu_B`; the `mu_B` factors
+cancel in the equation of motion, `g_factor` is explicit (default `2.0`), and
+the resulting eigenvalues are `hbar*omega` in the declared exchange-energy
+unit. The API retains that unit by default and only converts when both input
+and output units are known. `meV` and `mRy` conversion is available through
+`energy_conversion_factor`.
+
+```python
+from induced_exchange import fm_magnon_spectrum, fit_spin_stiffness, magnon_path_data
+
+raw = fm_magnon_spectrum(loaded.model, q_points, model="raw")
+robust = fm_magnon_spectrum(
+    loaded.model, q_points, model="robust_only", robust_sites=[1]
+)
+stiffness = fit_spin_stiffness(raw, q_max=0.1)
+# For a high-symmetry path, use magnon_path_data(raw, tick_indices=..., ...)
+```
+
+The raw model gives every site an ordinary dynamical degree of freedom. The
+robust-only model drops induced sites. `model="mryasov"` and
+`model="polesya"` both use the robust dressed interaction after analytical
+elimination of induced variables; neither creates induced magnon branches.
+Results expose acoustic/optical branches, the candidate ordering vector,
+Goldstone and negative-mode diagnostics, and `stable=False` when the sampled
+exchange does not support a collinear FM reference. A non-Gamma ordering
+tendency is reported as signed harmonic data only; it is not labelled a
+stable FM spectrum. The stiffness fit is through `E = D |q|^2` and stores the
+user-visible Cartesian reciprocal `q_max` interval.
+
 ## Variational induced-exchange downfolding
 
 IMX-04 uses the same response object to eliminate the induced variables from a

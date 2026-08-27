@@ -10,6 +10,7 @@ from induced_exchange import (
     SublatticeClassification,
     instantaneous_slave_moments,
 )
+from induced_exchange.downfolding import InducedExchangeDownfolding, inverse_fourier_dressed_jij
 
 
 def site(index: int, moment: float, position=(0.0, 0.0, 0.0)) -> MagneticSite:
@@ -112,3 +113,105 @@ def test_near_singular_induced_response_is_flagged_without_regularization():
     assert result.singular[0]
     assert any("not regularized" in warning for warning in result.warnings)
     assert np.isnan(result.induced_moments).all()
+
+
+def test_variational_one_induced_site_matches_analytic_dressed_exchange_and_energy():
+    model = crystal(
+        [site(1, 1.0), site(2, 1.0)],
+        [
+            ExchangeBond(1, 1, (0, 0, 0), 1.5),
+            ExchangeBond(2, 1, (0, 0, 0), 2.0),
+            ExchangeBond(1, 2, (0, 0, 0), 2.0),
+        ],
+    )
+    response = InducedMomentResponse(model, [1], [2], x={2: 0.5})
+    downfolding = InducedExchangeDownfolding(response)
+    result = downfolding.evaluate([[0.0, 0.0, 0.0]])
+
+    # J_eff = J_MM + K_Mm X K_mM = 1.5 + 2 * 0.5 * 2.
+    assert np.allclose(result.raw_robust[0], [[1.5]])
+    assert np.allclose(result.delta_induced[0], [[2.0]])
+    assert np.allclose(result.dressed[0], [[3.5]])
+    check = downfolding.energy_equivalence(result, [1.7])
+    assert check.equivalent
+    assert np.allclose(check.stationary_induced, [[[1.7]]])
+
+
+def test_downfolding_includes_induced_induced_propagation():
+    model = crystal(
+        [site(1, 1.0), site(2, 1.0), site(3, 1.0)],
+        [
+            ExchangeBond(2, 1, (0, 0, 0), 2.0),
+            ExchangeBond(1, 2, (0, 0, 0), 2.0),
+            ExchangeBond(3, 1, (0, 0, 0), 1.0),
+            ExchangeBond(1, 3, (0, 0, 0), 1.0),
+            ExchangeBond(2, 3, (0, 0, 0), 0.5),
+            ExchangeBond(3, 2, (0, 0, 0), 0.5),
+        ],
+    )
+    response = InducedMomentResponse(model, [1], [2, 3], x={2: 0.5, 3: 0.25})
+    result = InducedExchangeDownfolding(response).evaluate([[0.0, 0.0, 0.0]])
+    expected_operator = np.linalg.solve(
+        np.eye(2) - np.diag([0.5, 0.25]) @ np.array([[0.0, 0.5], [0.5, 0.0]]),
+        np.diag([0.5, 0.25]),
+    )
+    expected_delta = np.array([[2.0, 1.0]]) @ expected_operator @ np.array([[2.0], [1.0]])
+    assert np.allclose(result.response_operator[0], expected_operator)
+    assert np.allclose(result.delta_induced[0], expected_delta)
+
+
+def test_downfolding_marks_singular_induced_block_without_regularization():
+    model = crystal(
+        [site(1, 1.0), site(2, 1.0)],
+        [
+            ExchangeBond(2, 2, (0, 0, 0), 2.0),
+            ExchangeBond(2, 1, (0, 0, 0), 1.0),
+            ExchangeBond(1, 2, (0, 0, 0), 1.0),
+        ],
+    )
+    result = InducedExchangeDownfolding(
+        InducedMomentResponse(model, [1], [2], x=0.5)
+    ).evaluate([[0.0, 0.0, 0.0]])
+    assert result.singular[0]
+    assert np.isnan(result.dressed[0]).all()
+    assert any("not regularized" in warning for warning in result.warnings)
+
+
+def test_downfolding_has_no_dressing_without_induced_sites_or_when_x_is_zero():
+    model = crystal(
+        [site(1, 1.0), site(2, 1.0)],
+        [ExchangeBond(1, 1, (0, 0, 0), 2.0), ExchangeBond(2, 1, (0, 0, 0), 4.0)],
+    )
+    no_induced = InducedExchangeDownfolding(
+        InducedMomentResponse(model, [1], [], x=0.0)
+    ).evaluate([[0.0, 0.0, 0.0]])
+    zero_x = InducedExchangeDownfolding(
+        InducedMomentResponse(model, [1], [2], x=0.0)
+    ).evaluate([[0.0, 0.0, 0.0]])
+    assert np.allclose(no_induced.dressed, no_induced.raw_robust)
+    assert np.allclose(zero_x.dressed, zero_x.raw_robust)
+    assert np.allclose(zero_x.delta_induced, 0.0)
+
+
+def test_ordering_diagnostic_and_inverse_transform_are_explicit_about_sampling():
+    model = crystal(
+        [site(1, 1.0), site(2, 1.0)],
+        [
+            ExchangeBond(1, 1, (1, 0, 0), 1.0),
+            ExchangeBond(1, 1, (-1, 0, 0), 1.0),
+            ExchangeBond(2, 1, (0, 0, 0), 1.0),
+            ExchangeBond(1, 2, (0, 0, 0), 1.0),
+        ],
+    )
+    response = InducedMomentResponse(model, [1], [2], x=0.0)
+    downfolding = InducedExchangeDownfolding(response)
+    result = downfolding.evaluate([[0.0, 0.0, 0.0], [0.5, 0.0, 0.0]])
+    comparison = downfolding.ordering_comparison(result)
+    assert comparison.changed is False
+    assert comparison.diagnostic.startswith("No —")
+    real_space = inverse_fourier_dressed_jij(result, displacements=[[1.0, 0.0, 0.0]])
+    assert real_space.values.shape == (1, 1, 1)
+    assert real_space.raw_values is not None
+    assert real_space.delta_values is not None
+    assert real_space.shell_diagnostics[0]["dressed_max_abs"] == 2.0
+    assert any("finite-q reconstructions" in warning for warning in real_space.warnings)

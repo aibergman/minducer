@@ -142,3 +142,45 @@ are slave variables, not independent LLG/LSWT degrees of freedom. Both q-space
 and real-space results expose condition numbers and singularity flags for
 `I - X K_mm`; near-singular systems are reported and never silently
 regularized.
+
+## Variational induced-exchange downfolding
+
+IMX-04 uses the same response object to eliminate the induced variables from a
+single documented quadratic energy functional:
+
+```text
+E(M,m) = -1/2 M† J_MM M
+       + 1/2 m† (X⁻¹ - K_mm) m
+       - Re[m† K_mM M]
+```
+
+Stationarity gives
+`m* = (I - X K_mm)⁻¹ X K_mM M`. Substitution gives the Schur-complement
+interaction
+`J_eff = J_MM + K_Mm (X⁻¹ - K_mm)⁻¹ K_mM`.
+The implementation evaluates the algebraically equivalent stable form
+`(I - X K_mm)⁻¹ X`, including the continuous `X -> 0` limit. This is a
+variational downfolding of the **J-weighted induced-response approximation**
+when `K = J_input`; it is not an exact first-principles susceptibility.
+
+```python
+from induced_exchange import InducedExchangeDownfolding
+
+downfolding = InducedExchangeDownfolding(response)
+result = downfolding.evaluate(q, coordinates="fractional")
+result.raw_robust       # direct robust-only J_MM(q)
+result.dressed          # J_eff(q)
+result.delta_induced    # induced correction
+
+energy_check = downfolding.energy_equivalence(result, [[1.0]])
+ordering = downfolding.ordering_comparison(result)
+real_space = downfolding.inverse_fourier(result)
+```
+
+`energy_equivalence()` checks the explicit stationary slave energy against the
+downfolded quadratic energy. `ordering_comparison()` reports whether induced
+dressing changes the leading ordering vector, including the case where both
+raw and dressed calculations remain AF-like. Inverse-transformed dressed
+`Jij` are finite-q reconstructions; the result carries warnings for
+undersampled or non-regular q meshes and does not claim uniqueness beyond the
+sampled resolution.

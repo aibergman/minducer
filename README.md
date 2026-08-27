@@ -2,8 +2,8 @@
 
 This repository is being built as a conservative analysis tool for atomistic
 exchange models. IMX-01 provides the input-level data model and UppASD-style
-parsers. Induced-moment response models, Fourier analysis, and magnons are
-separate later tasks.
+parsers, and IMX-02 provides reciprocal-space exchange analysis. Induced-moment
+response models and magnons are separate later tasks.
 
 ## Input format
 
@@ -68,3 +68,33 @@ python -m induced_exchange.io_uppasd path/to/inpsd.dat
 The command prints the cell, basis/moment/bond counts, bond-distance range, and
 structured validation diagnostics including duplicates, self interactions,
 missing moments, and likely reciprocal `+/-R` partners.
+
+## Reciprocal-space exchange
+
+IMX-02 adds reciprocal-space analysis in `induced_exchange.reciprocal`.
+The rows of the input `cell` matrix are the direct Cartesian lattice vectors.
+The reciprocal rows `B` obey `A @ B.T = 2*pi*I`; reduced reciprocal
+coordinates `h` and Cartesian coordinates are related by `q_cart = h @ B`.
+For example:
+
+```python
+from induced_exchange import (
+    exchange_eigensystem,
+    high_symmetry_path,
+    load_uppasd,
+    ordering_analysis,
+    regular_q_mesh,
+)
+
+loaded = load_uppasd("path/to/inpsd.dat")
+q = regular_q_mesh(loaded.model, (16, 16, 16), coordinates="fractional")
+eigensystem = exchange_eigensystem(loaded.model, q, coordinates="fractional")
+diagnosis = ordering_analysis(loaded.model, q, coordinates="fractional")
+path = high_symmetry_path(loaded.model)
+```
+
+The fixed convention is `H = -1/2 sum_ij Jij e_i dot e_j`, so the candidate
+ordering vector is where the largest eigenvalue of `J(q)` occurs. Fourier
+transforms retain incomplete or asymmetric bond input and report Hermiticity
+violations; they are never silently symmetrized. `path_exchange_data` and the
+`as_dict()`/`to_json()` methods provide plotting and downloadable numeric data.

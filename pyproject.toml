@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "induced-exchange"
+version = "0.1.0"
+description = "Validated input model and analysis tools for induced-moment exchange models"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.23"]
+
+[project.scripts]
+induced-exchange-uppasd = "induced_exchange.io_uppasd:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

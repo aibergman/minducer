@@ -1,9 +1,43 @@
 # Induced-Moment Exchange Explorer
 
-This repository is being built as a conservative analysis tool for atomistic
-exchange models. IMX-01 provides the input-level data model and UppASD-style
-parsers, and IMX-02 provides reciprocal-space exchange analysis. Induced-moment
-response models and magnons are separate later tasks.
+This repository is a conservative analysis tool for atomistic exchange models.
+The validated Python package and the Hugging Face/Gradio Space expose UppASD
+input parsing, reciprocal-space exchange, induced-moment response models,
+variational downfolding, FM-compatible magnons, and dataset comparison.
+
+## Run the Space
+
+From the repository root:
+
+```bash
+python -m pip install -r requirements.txt
+python app.py
+```
+
+The **Input** tab accepts either an `inpsd.dat` plus its referenced files or
+individual `posfile`, `momfile`, and `jfile` uploads. References are matched by
+basename, with explicit manual reassignment and unresolved-file diagnostics.
+Three small CPU-friendly examples are bundled under `examples/`.
+
+The UI is orchestration only: all parsing and scientific calculations remain in
+the `induced_exchange` package, and the existing unit tests can be run without
+Gradio with `PYTHONPATH=src pytest -q`.
+
+## Scientific provenance
+
+The induced-moment framing follows O. N. Mryasov, U. Nowak, K. Y. Guslienko,
+and R. W. Chantrell, “Temperature-dependent magnetic properties of FePt:
+Effective spin Hamiltonian model,” *Europhysics Letters* 69, 805 (2005),
+[arXiv:physics/0411020](https://arxiv.org/abs/physics/0411020), and S. Polesya
+*et al.*, “Finite-temperature magnetism of Fe$_x$Pd$_{1-x}$ and
+Co$_x$Pt$_{1-x}$ alloys,” *Physical Review B* 82, 214409 (2010),
+[arXiv:1008.3784](https://arxiv.org/abs/1008.3784).
+
+These papers motivate treating moments on nominally non-magnetic sites as
+induced/slave variables. This project does not claim that conventional input
+`Jij` are exact first-principles susceptibilities: the UI labels `K = input Jij`
+as a **J-weighted induced-response approximation**, and reports conditioning
+and model-mismatch warnings.
 
 ## Input format
 

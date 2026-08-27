@@ -1,0 +1,9 @@
+simid FePt_style_demo
+ncell 4 4 4
+BC P P P
+cell 1.0 0.0 0.0
+     0.5 0.5 0.0
+     0.0 0.0 0.9525
+posfile ./posfile
+momfile ./momfile
+exchange ./jfile

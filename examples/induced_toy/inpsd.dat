@@ -1,0 +1,7 @@
+simid induced_toy
+cell 1.0 0.0 0.0
+     0.0 1.0 0.0
+     0.0 0.0 1.0
+posfile posfile
+momfile momfile
+exchange jfile

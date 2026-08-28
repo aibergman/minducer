@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
+import pytest
 
 from induced_exchange import (
     ExchangeBond,
@@ -13,6 +16,7 @@ from induced_exchange import (
     fit_spin_stiffness,
     magnon_path_data,
 )
+from induced_exchange.io_uppasd import load_uppasd
 
 
 def crystal(sites, bonds, *, energy="unspecified"):
@@ -32,8 +36,9 @@ def test_one_sublattice_nn_fm_has_analytic_moment_normalized_dispersion():
     q = [[0.0, 0.0, 0.0], [0.25, 0.0, 0.0], [0.5, 0.0, 0.0]]
     result = fm_magnon_spectrum(model, q)
 
-    # hbar*omega = g/mu * [J(0)-J(q)] = 2 * [2 - 2 cos(2 pi h)].
-    assert np.allclose(result.energies[:, 0].real, [0.0, 4.0, 8.0])
+    # UppASD's default Landé product gives hbar*omega = g^2/mu *
+    # [J(0)-J(q)] = 4 * [2 - 2 cos(2 pi h)].
+    assert np.allclose(result.energies[:, 0].real, [0.0, 8.0, 16.0])
     assert result.goldstone_ok
     assert result.stable
 
@@ -44,7 +49,7 @@ def test_one_sublattice_multi_shell_fm_adds_each_shell_with_the_same_convention(
         [bond(1, 1, (1, 0, 0), 1.0), bond(1, 1, (-1, 0, 0), 1.0), bond(1, 1, (2, 0, 0), 0.5), bond(1, 1, (-2, 0, 0), 0.5)],
     )
     result = fm_magnon_spectrum(model, [[0.25, 0.0, 0.0]])
-    expected = 2.0 * ((2.0 + 1.0) - (2.0 * np.cos(np.pi / 2.0) + 1.0 * np.cos(np.pi)))
+    expected = 4.0 * ((2.0 + 1.0) - (2.0 * np.cos(np.pi / 2.0) + 1.0 * np.cos(np.pi)))
     assert np.isclose(result.energies[0, 0].real, expected)
 
 
@@ -66,8 +71,45 @@ def test_two_rigid_sublattices_have_acoustic_and_optical_branches():
     )
     result = fm_magnon_spectrum(model, [[0.0, 0.0, 0.0]])
     assert result.energies.shape == (1, 2)
-    assert np.allclose(result.energies[0].real, [0.0, 4.0])
+    assert np.allclose(result.energies[0].real, [0.0, 8.0])
     assert result.goldstone_ok
+
+
+def test_uppasd_style_two_rigid_lswt_matches_reference_path():
+    pytest.importorskip("spglib")
+
+    base = Path("examples/uppasd_style")
+    q_fractional = np.loadtxt(base / "qfile.kpath", skiprows=1, usecols=(0, 1, 2))
+    qpoint_export = np.loadtxt(base / "qpoints.out", usecols=(0, 1, 2, 3))
+    reference = np.loadtxt(base / "magnons.reference.txt", usecols=(1, 2))
+    loaded = load_uppasd(base / "inpsd.dat", expand_symmetry=True)
+
+    # qpoints.out contains Cartesian reciprocal vectors in UppASD's 1/alat
+    # convention. The public API uses qfile.kpath as fractional input and
+    # computes physical reciprocal Cartesian vectors from the supplied cell.
+    assert np.array_equal(qpoint_export[:, 0], np.arange(1, len(q_fractional) + 1))
+    assert q_fractional.shape == (177, 3)
+    assert reference.shape == (177, 2)
+    result = fm_magnon_spectrum(
+        loaded.model,
+        q_fractional,
+        model="raw",
+        output_energy_unit="meV",
+    )
+    # qpoints.out is printed to six decimal places in this example.
+    assert np.allclose(
+        qpoint_export[:, 1:],
+        result.q_cartesian * loaded.config.alat / (2.0 * np.pi),
+        atol=6e-7,
+        rtol=0.0,
+    )
+
+    # UppASD's AMS reference is in meV and uses the product of its default
+    # site Landé factors. The library now applies that same g_factor**2
+    # normalization by default.
+    assert result.site_indices == (1, 2)
+    assert result.energies.shape == reference.shape
+    assert np.allclose(result.energies.real, reference, rtol=2e-7, atol=1e-3)
 
 
 def test_moment_scaling_and_unit_conversion_are_explicit():
@@ -78,8 +120,8 @@ def test_moment_scaling_and_unit_conversion_are_explicit():
     )
     mry = fm_magnon_spectrum(model, [[0.25, 0.0, 0.0]])
     mev = fm_magnon_spectrum(model, [[0.25, 0.0, 0.0]], output_energy_unit="meV")
-    assert np.isclose(mry.energies[0, 0].real, 2.0)
-    assert np.isclose(mev.energies[0, 0].real, 2.0 * 13.605693009)
+    assert np.isclose(mry.energies[0, 0].real, 4.0)
+    assert np.isclose(mev.energies[0, 0].real, 4.0 * 13.605693009)
     assert mev.energy_unit == "meV"
 
 
@@ -100,7 +142,7 @@ def test_stiffness_fit_uses_visible_user_interval_and_has_expected_long_wave_lim
     result = fm_magnon_spectrum(model, q)
     stiffness = fit_spin_stiffness(result, q_max=0.25)
     assert stiffness.point_count == 3
-    assert np.isclose(stiffness.D, 2.0, rtol=5e-3)
+    assert np.isclose(stiffness.D, 4.0, rtol=5e-3)
     assert stiffness.q_max == 0.25
 
 

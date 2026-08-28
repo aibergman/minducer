@@ -19,6 +19,7 @@ from .model import (
     ValidationReport,
     validate_model,
 )
+from .symmetry import SymmetryExpansionError, SymmetryExpansionReport, expand_exchange_symmetry
 
 
 class InputFormatError(ValueError):
@@ -34,6 +35,7 @@ class InpsdConfig:
     exchange: Path
     keywords: dict[str, list[str]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    alat: float | None = None
 
 
 @dataclass
@@ -47,7 +49,7 @@ class PositionRecord:
 @dataclass
 class MomentRecord:
     site: int
-    atom_type: object
+    moment_field: str
     moment: float
     spin_direction: tuple[float, float, float] | None
     line: int
@@ -58,6 +60,7 @@ class LoadedUppASD:
     model: MagneticCrystal
     report: ValidationReport
     config: InpsdConfig
+    symmetry_expansion: SymmetryExpansionReport | None = None
 
     def __getattr__(self, name: str):
         # Keeps the result convenient for interactive/debug use while keeping
@@ -66,8 +69,17 @@ class LoadedUppASD:
 
 
 _KNOWN_KEYWORDS = {
-    "simid", "ncell", "bc", "posfile", "momfile", "exchange", "jfile",
-    "cell", "hamiltonian", "elements", "do", "temperature", "tstep",
+    "simid", "ncell", "bc", "posfile", "positions", "momfile", "moments", "exchange", "jfile",
+    "cell", "alat", "hamiltonian", "elements", "do", "temperature", "tstep",
+}
+
+# These are the canonical file keywords.  Keep the older descriptive
+# spellings as fallbacks so existing input decks continue to load.  The order
+# is significant: when both spellings are present, the canonical keyword wins.
+_FILE_KEY_ALIASES = {
+    "posfile": ("posfile", "positions"),
+    "momfile": ("momfile", "moments"),
+    "exchange": ("exchange", "jfile"),
 }
 
 
@@ -125,6 +137,7 @@ def parse_inpsd(path: str | Path) -> InpsdConfig:
     values: dict[str, list[str]] = {}
     warnings: list[str] = []
     cell: np.ndarray | None = None
+    alat: float | None = None
     index = 0
     while index < len(lines):
         line_number = index + 1
@@ -139,9 +152,19 @@ def parse_inpsd(path: str | Path) -> InpsdConfig:
         if not tokens:
             continue
         key = tokens[0].lower()
+        if key == "alat":
+            if len(tokens) != 2:
+                raise InputFormatError(f"{input_file}:{line_number}: alat must contain one numeric value in metres")
+            alat = _float(tokens[1], path=input_file, line=line_number, field="alat")
+            if alat <= 0:
+                raise InputFormatError(f"{input_file}:{line_number}: alat must be positive")
+            values[key] = tokens[1:]
+            continue
         if key == "cell":
             rows: list[list[float]] = []
-            first = tokens[1:]
+            # UppASD examples commonly separate cell components with commas.
+            # Commas are punctuation here, not part of the numeric value.
+            first = [token.strip(",") for token in tokens[1:]]
             if first:
                 if len(first) == 9 and all(_is_float(token) for token in first):
                     cell = np.asarray([float(token) for token in first], dtype=float).reshape(3, 3)
@@ -157,7 +180,7 @@ def parse_inpsd(path: str | Path) -> InpsdConfig:
                 index += 1
                 if not continuation:
                     continue
-                continuation_tokens = shlex.split(continuation)
+                continuation_tokens = [token.strip(",") for token in shlex.split(continuation)]
                 if len(continuation_tokens) != 3 or not all(_is_float(token) for token in continuation_tokens):
                     raise InputFormatError(f"{input_file}:{continuation_number}: cell continuation must contain three numeric values")
                 rows.append([float(token) for token in continuation_tokens])
@@ -171,7 +194,7 @@ def parse_inpsd(path: str | Path) -> InpsdConfig:
         raise InputFormatError(f"{input_file}: missing cell")
 
     def required_path(name: str) -> Path:
-        raw = values.get(name) or values.get("jfile" if name == "exchange" else name)
+        raw = next((values[key] for key in _FILE_KEY_ALIASES[name] if values.get(key)), None)
         if not raw:
             raise InputFormatError(f"{input_file}: missing {name} keyword")
         return (base / raw[0]).resolve() if not Path(raw[0]).is_absolute() else Path(raw[0]).resolve()
@@ -184,6 +207,7 @@ def parse_inpsd(path: str | Path) -> InpsdConfig:
         exchange=required_path("exchange"),
         keywords=values,
         warnings=warnings,
+        alat=alat,
     )
 
 
@@ -217,7 +241,12 @@ def parse_posfile(path: str | Path) -> dict[int, PositionRecord]:
 
 
 def parse_momfile(path: str | Path) -> dict[int, MomentRecord]:
-    """Parse ``site atom_type moment [sx sy sz]`` rows."""
+    """Parse ``site moment_field moment [sx sy sz]`` rows.
+
+    The second field is accepted as opaque UppASD moment-file metadata.  It is
+    not a species/type identifier; species identity comes from the second
+    column of ``posfile``.
+    """
 
     source = Path(path).expanduser().resolve()
     records: dict[int, MomentRecord] = {}
@@ -231,7 +260,7 @@ def parse_momfile(path: str | Path) -> dict[int, MomentRecord]:
         direction = None
         if len(tokens) == 6:
             direction = tuple(_float(token, path=source, line=line, field="spin direction") for token in tokens[3:6])
-        records[site] = MomentRecord(site, _identifier(tokens[1]), moment, direction, line)
+        records[site] = MomentRecord(site, tokens[1], moment, direction, line)
     return records
 
 
@@ -267,8 +296,21 @@ def parse_exchange(path: str | Path, *, strict: bool = True, report: ValidationR
     return bonds
 
 
-def load_uppasd(path: str | Path, *, energy_unit: str = "unspecified", length_unit: str = "unspecified", strict: bool = False) -> LoadedUppASD:
-    """Load and validate an UppASD input set as one internal model."""
+def load_uppasd(
+    path: str | Path,
+    *,
+    energy_unit: str = "mRy",
+    length_unit: str = "unspecified",
+    strict: bool = False,
+    expand_symmetry: bool = False,
+    symmetry_symprec: float = 1e-5,
+) -> LoadedUppASD:
+    """Load and validate an UppASD input set as one internal model.
+
+    Set ``expand_symmetry=True`` when the exchange file contains one
+    representative per crystal-symmetry orbit rather than all neighbour
+    translations.  The default retains the supplied rows exactly.
+    """
 
     config = parse_inpsd(path)
     report = ValidationReport()
@@ -282,29 +324,47 @@ def load_uppasd(path: str | Path, *, energy_unit: str = "unspecified", length_un
         report.add_error("missing_moment", f"site {site} appears in posfile but not momfile", source=str(config.momfile))
     for site in sorted(set(moments) - set(positions)):
         report.add_warning("moment_without_position", f"site {site} appears in momfile but not posfile", source=str(config.posfile))
-    for site in sorted(set(positions) & set(moments)):
-        if positions[site].atom_type != moments[site].atom_type:
-            report.add_warning("atom_type_mismatch", f"site {site} has atom type {positions[site].atom_type!r} in posfile and {moments[site].atom_type!r} in momfile")
-
+    length_scale = 1.0 if config.alat is None else config.alat
     sites = [
         MagneticSite(
             index=record.site,
             atom_type=record.atom_type,
-            position=record.position,
+            position=tuple(float(length_scale * value) for value in record.position),
             moment=moments[record.site].moment if record.site in moments else None,
             spin_direction=moments[record.site].spin_direction if record.site in moments else None,
         )
         for record in sorted(positions.values(), key=lambda item: item.site)
     ]
+    scaled_bonds = [
+        ExchangeBond(
+            bond.i,
+            bond.j,
+            tuple(float(length_scale * value) for value in bond.displacement),
+            bond.jij,
+            None if bond.supplied_distance is None else float(length_scale * bond.supplied_distance),
+            bond.source_line,
+        )
+        for bond in bonds
+    ]
     model = MagneticCrystal(
-        cell=config.cell,
+        cell=config.cell * length_scale,
         sites=sites,
-        exchange_bonds=bonds,
-        units=UnitMetadata(energy=energy_unit, length=length_unit),
+        exchange_bonds=scaled_bonds,
+        units=UnitMetadata(energy=energy_unit, length="m" if config.alat is not None else length_unit),
         source_files={"inpsd": config.input_file, "posfile": config.posfile, "momfile": config.momfile, "exchange": config.exchange},
     )
+    expansion_report = None
+    if expand_symmetry:
+        expanded = expand_exchange_symmetry(model, symprec=symmetry_symprec)
+        model = expanded.model
+        expansion_report = expanded.report
+        report.add_warning(
+            "symmetry_expanded",
+            f"expanded {expansion_report.input_bonds} representative exchange bond(s) to {expansion_report.output_bonds} using {expansion_report.symmetry_operations} spglib symmetry operation(s)",
+            source=str(config.exchange),
+        )
     validate_model(model, report)
-    return LoadedUppASD(model, report, config)
+    return LoadedUppASD(model, report, config, expansion_report)
 
 
 # Explicit aliases make the input terminology used by different UppASD
@@ -320,21 +380,34 @@ def _format_matrix(matrix: np.ndarray) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Inspect and validate an UppASD input set")
     parser.add_argument("inpsd", type=Path, help="path to inpsd.dat")
-    parser.add_argument("--energy-unit", default="unspecified")
+    parser.add_argument("--energy-unit", default="mRy", help="energy unit of Jij values (default: mRy, the UppASD convention)")
     parser.add_argument("--length-unit", default="unspecified")
+    parser.add_argument("--expand-symmetry", "--symmetry", dest="expand_symmetry", action="store_true", help="expand symmetry-reduced exchange representatives with spglib")
+    parser.add_argument("--symmetry-symprec", type=float, default=1e-5, help="spglib symmetry tolerance used with --expand-symmetry")
     args = parser.parse_args(argv)
     try:
-        loaded = load_uppasd(args.inpsd, energy_unit=args.energy_unit, length_unit=args.length_unit)
-    except (FileNotFoundError, InputFormatError) as exc:
+        loaded = load_uppasd(
+            args.inpsd,
+            energy_unit=args.energy_unit,
+            length_unit=args.length_unit,
+            expand_symmetry=args.expand_symmetry,
+            symmetry_symprec=args.symmetry_symprec,
+        )
+    except (FileNotFoundError, InputFormatError, SymmetryExpansionError) as exc:
         parser.error(str(exc))
     model = loaded.model
     print(f"Input: {loaded.config.input_file}")
     print("Cell:")
     print(_format_matrix(model.cell))
+    if loaded.config.alat is not None:
+        print(f"Alat: {loaded.config.alat:.10g} m (applied to cell, positions, and exchange displacements)")
     print(f"Cell volume: {model.cell_volume:.10g}")
     print(f"Basis sites: {len(model.sites)}")
     print("Moments: " + ", ".join(f"{site.index}={site.moment:g}" for site in model.sites if site.moment is not None))
     print(f"Exchange bonds: {len(model.exchange_bonds)}")
+    if loaded.symmetry_expansion is not None:
+        expansion = loaded.symmetry_expansion
+        print(f"Symmetry expansion: {expansion.input_bonds} -> {expansion.output_bonds} bonds using {expansion.symmetry_operations} operations")
     if model.exchange_bonds:
         distances = model.bond_distances
         print(f"Bond distance range: {distances.min():.10g} .. {distances.max():.10g}")

@@ -397,6 +397,15 @@ def _scalar_response(values: np.ndarray) -> np.ndarray:
     return np.linalg.norm(values, axis=1).real.astype(float)
 
 
+def _path_distance(q_cartesian: np.ndarray) -> np.ndarray:
+    """Return the cumulative Cartesian distance along an ordered q path."""
+
+    q = np.asarray(q_cartesian, dtype=float)
+    if len(q) <= 1:
+        return np.zeros(len(q), dtype=float)
+    return np.concatenate(([0.0], np.cumsum(np.linalg.norm(np.diff(q, axis=0), axis=1))))
+
+
 def _normalise_to_first(values: np.ndarray) -> np.ndarray:
     result = np.asarray(values, dtype=complex).copy()
     if len(result) == 0:
@@ -871,10 +880,10 @@ def plot_comparison(result: DatasetComparison, *, observable: str = "raw", ax: A
             for model_name, spectrum in (("raw", analysis.raw_magnons), ("robust-only", analysis.robust_magnons), ("dressed", analysis.dressed_magnons)):
                 if spectrum is None:
                     continue
-                x = np.arange(len(spectrum.energies))
+                x = _path_distance(spectrum.q_cartesian)
                 for branch in range(spectrum.energies.shape[1]):
                     ax.plot(x, spectrum.energies[:, branch].real, label=f"{analysis.dataset.label} {model_name} branch {branch + 1}")
-        ax.set_xlabel("q-point index")
+        ax.set_xlabel("q-path")
         ax.set_ylabel("magnon energy")
         ax.set_title("magnon comparison")
         ax.legend()
@@ -883,11 +892,11 @@ def plot_comparison(result: DatasetComparison, *, observable: str = "raw", ax: A
     values_b, _ = _observable_values(result.dataset_b, observable)
     if values_a is None or values_b is None:
         raise ValueError(f"{observable} data are unavailable")
-    x = np.arange(len(result.q_fractional))
+    x = _path_distance(result.q_cartesian)
     for values, label in ((values_a, result.dataset_a.dataset.label), (values_b, result.dataset_b.dataset.label)):
         for branch in range(values.shape[1]):
             ax.plot(x, values[:, branch].real, label=f"{label} branch {branch + 1}")
-    ax.set_xlabel("q-point index")
+    ax.set_xlabel("q-path")
     ax.set_ylabel("magnon energy" if "magnon" in observable.lower() else "J(q) eigenvalue")
     ax.set_title(f"{observable} comparison")
     ax.legend()
@@ -948,15 +957,15 @@ def plot_induced_response_comparison(result: DatasetComparison, *, ax: Any | Non
     if ax is None:
         _, ax = plt.subplots()
     response = result.induced_response
-    x = np.arange(len(response.q_fractional))
+    x = _path_distance(response.q_cartesian)
     ax.plot(x, _scalar_response(response.model_a_normalized), label=f"{result.dataset_a.dataset.label} model")
     ax.plot(x, _scalar_response(response.model_b_normalized), label=f"{result.dataset_b.dataset.label} model")
     if response.external is not None:
         external = response.external.moments
         reference = external[0] if len(external) else 1.0
-        ax.plot(np.linspace(0, len(x) - 1, len(external)), external / reference, "o", label="DFT response")
-    ax.set_xlabel("q/path index")
-    ax.set_ylabel("m_ind(q) / m_ind(0)")
+        ax.plot(np.linspace(float(x[0]), float(x[-1]), len(external)), external / reference, "o", label="DFT response")
+    ax.set_xlabel("q-path")
+    ax.set_ylabel("m_ind(q) / m_ind(Γ)")
     ax.legend()
     return ax
 

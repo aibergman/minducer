@@ -29,7 +29,7 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 
-from .model import MagneticCrystal
+from .model import MagneticCrystal, _cell_is_degenerate
 
 
 ArrayLike = Sequence[float] | np.ndarray
@@ -41,7 +41,7 @@ def _as_cell(cell: ArrayLike) -> np.ndarray:
         raise ValueError(f"cell must have shape (3, 3), got {matrix.shape}")
     if not np.isfinite(matrix).all():
         raise ValueError("cell contains non-finite values")
-    if abs(float(np.linalg.det(matrix))) <= 1e-14:
+    if _cell_is_degenerate(matrix):
         raise ValueError("cell has zero (or numerically zero) volume")
     return matrix
 
@@ -555,18 +555,30 @@ def high_symmetry_path(
 
             positions = np.asarray([site.position for site in model_or_cell.sites], dtype=float)
             scaled_positions = positions @ np.linalg.inv(model_or_cell.cell)
+            # spglib's default ``symprec`` is an absolute coordinate
+            # tolerance.  UppASD inputs with ``alat`` are stored in metres,
+            # so passing a 1e-10-metre cell directly makes that tolerance
+            # enormous and can make an otherwise ordinary structure fail
+            # symmetry detection.  Symmetry is scale invariant; normalize
+            # only the temporary cell passed to seekpath and keep the actual
+            # lattice for the returned Cartesian q coordinates.
+            cell_scale = float(np.max(np.linalg.norm(model_or_cell.cell, axis=1), initial=0.0))
+            seekpath_cell = model_or_cell.cell / cell_scale if cell_scale > 0.0 else model_or_cell.cell
             structure = (
-                model_or_cell.cell,
+                seekpath_cell,
                 scaled_positions,
                 [site.atom_type for site in model_or_cell.sites],
             )
             path_data = seekpath.get_path(structure)
             point_coordinates = path_data["point_coords"]
+            primitive_reciprocal = np.asarray(path_data["reciprocal_primitive_lattice"], dtype=float) / cell_scale
             vertices = []
             for start, end in path_data["path"]:
                 if not vertices or vertices[-1][0] != start:
-                    vertices.append((start, point_coordinates[start]))
-                vertices.append((end, point_coordinates[end]))
+                    start_cartesian = np.asarray(point_coordinates[start], dtype=float) @ primitive_reciprocal
+                    vertices.append((start, lattice.cartesian_to_fractional(start_cartesian)))
+                end_cartesian = np.asarray(point_coordinates[end], dtype=float) @ primitive_reciprocal
+                vertices.append((end, lattice.cartesian_to_fractional(end_cartesian)))
             return _path_from_vertices(lattice, vertices, n_per_segment=n_per_segment, source="seekpath")
         except Exception:
             # Classification is optional.  The fallback remains explicit in
@@ -627,7 +639,7 @@ def plot_exchange_path(data: ExchangePathData, ax: Any = None) -> Any:
     for branch in data.eigenvalues.T:
         ax.plot(data.path.distance, branch.real)
     ax.set_xticks(data.path.distance[data.path.tick_positions], data.path.tick_labels)
-    ax.set_xlabel("q path distance")
+    ax.set_xlabel("q-path")
     ax.set_ylabel("exchange eigenvalue")
     return ax
 

@@ -479,7 +479,11 @@ class InducedMomentResponse:
             k_mm = np.zeros((len(q), n_ind, n_ind), dtype=complex)
             k_mr = np.broadcast_to(self._local_matrix, (len(q), n_ind, n_rob)).astype(complex).copy()
             return q_fractional, q_cartesian, k_mm, k_mr, None
-        transformed = exchange_fourier(self.kernel_model, q, coordinates="cartesian")
+        # ``q_cartesian`` is authoritative for the Fourier phase.  Passing
+        # the original fractional coordinates here would interpret reduced
+        # reciprocal coordinates as Cartesian and make the two cross blocks
+        # inconsistent with downfolding at nonzero q.
+        transformed = exchange_fourier(self.kernel_model, q_cartesian, coordinates="cartesian")
         position = {site: index for index, site in enumerate(transformed.site_indices)}
         k_mm = transformed.matrices[:, [position[site] for site in self.induced_sites]][:, :, [position[site] for site in self.induced_sites]]
         k_mr = transformed.matrices[:, [position[site] for site in self.induced_sites]][:, :, [position[site] for site in self.robust_sites]]

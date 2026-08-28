@@ -38,6 +38,7 @@ Example inpsd.dat syntax:
     cell      1.000000000000000  0.000000000000000  0.000000000000000
               0.500000000000000  0.500000000000000  0.000000000000000
               0.000000000000000  0.000000000000000  0.9525
+    alat      2.87e-10
 
     posfile   ./posfile
     exchange  ../fourj.jij.dat
@@ -53,7 +54,11 @@ Example momfile:
     1 1 2.9913824 0.0 0.0 1.0
 
 Interpret minimally as:
-    site_index atom_type moment [optional sx sy sz]
+    site_index moment_field moment [optional sx sy sz]
+
+The second `momfile` field is UppASD moment-file metadata and is not a
+species identifier. Species/type identity comes from the second column of
+`posfile` and is the value used for symmetry mapping.
 
 Example jfile:
     i j rx ry rz Jij distance
@@ -69,10 +74,14 @@ For this input convention they are Cartesian.
 
 Units:
 - preserve input energy units unless the program can infer them safely;
+- use mRy as the default UppASD energy-unit label, while allowing explicit
+  meV/mRy (or other supported unit) confirmation/override;
 - allow user selection/confirmation of meV vs mRy;
 - internally use one well-documented energy unit;
 - moments are in mu_B unless overridden;
 - Cartesian positions use the same length unit as the supplied cell and Jij displacement vectors.
+- when `alat` is supplied, interpret it as the length unit in metres and scale
+  the cell, positions, and exchange displacements consistently;
 
 Hamiltonian convention must be explicit and centralized, e.g.
 
@@ -314,7 +323,7 @@ Suggested package layout:
     requirements.txt
 
 Use:
-- Python >=3.11;
+- Python >=3.10;
 - numpy;
 - scipy;
 - pandas where useful;

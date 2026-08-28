@@ -22,10 +22,14 @@ The closeout commands are:
 ```bash
 PYTHONPATH=src pytest -q
 PYTHONPATH=src python -c "import app; app.build_demo()"
+PYTHONPATH=src python -m induced_exchange.io_uppasd examples/induced_toy/inpsd.dat --energy-unit meV
 ```
 
-The final run completed with **56 tests passed** and the Space smoke test
+The final run completed with **61 tests passed** and the Space smoke test
 constructed a `Blocks` application successfully without launching a server.
+The nonzero-q induced-toy check also confirmed `K_Mm = K_mM†`, Hermitian
+dressed exchange, and no false block-adjoint warning at fractional q = (0.25,
+0, 0).
 
 ## Interpretation
 

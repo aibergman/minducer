@@ -10,6 +10,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["numpy>=1.23"]
 
+[project.optional-dependencies]
+symmetry = ["spglib>=2.0"]
+paths = ["seekpath>=2.1"]
+
 [project.scripts]
 induced-exchange-uppasd = "induced_exchange.io_uppasd:main"
 

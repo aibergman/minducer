@@ -1,0 +1,14 @@
+simid FePt1234
+ncell 32 32 32
+BC P P P
+cell   1.00000000  0.00000000  0.00000000
+       0.00000000  1.00000000  0.00000000
+       0.00000000  0.00000000  1.36882830
+
+
+exchange  ./jfile
+momfile   ./momfile
+posfile ./posfile
+
+
+alat 2.87e-10

@@ -9,8 +9,10 @@ from induced_exchange import (
     MagneticSite,
     SublatticeClassification,
     instantaneous_slave_moments,
+    reciprocal_lattice,
 )
 from induced_exchange.downfolding import InducedExchangeDownfolding, inverse_fourier_dressed_jij
+from induced_exchange.io_uppasd import load_uppasd
 
 
 def site(index: int, moment: float, position=(0.0, 0.0, 0.0)) -> MagneticSite:
@@ -89,6 +91,61 @@ def test_q_space_solution_matches_real_space_at_gamma_and_exposes_diagnostics():
     assert np.allclose(reciprocal.induced_moments[0], real.induced_moments)
     assert np.allclose(reciprocal.m_ind_q_over_m_ind_0[0], [1.0])
     assert np.isclose(reciprocal.condition_numbers[0], 1.0)
+
+
+def test_fractional_q_response_matches_explicitly_converted_cartesian_q():
+    model = crystal(
+        [site(1, 1.0), site(2, 1.0)],
+        [
+            ExchangeBond(2, 1, (1.0, 0.0, 0.0), 2.0),
+            ExchangeBond(2, 1, (-1.0, 0.0, 0.0), 2.0),
+            ExchangeBond(1, 2, (1.0, 0.0, 0.0), 2.0),
+            ExchangeBond(1, 2, (-1.0, 0.0, 0.0), 2.0),
+        ],
+    )
+    response = InducedMomentResponse(model, [1], [2], x=0.25)
+    q_fractional = np.asarray([[0.25, 0.0, 0.0], [0.125, 0.25, 0.0]])
+    q_cartesian = reciprocal_lattice(model.cell).fractional_to_cartesian(q_fractional)
+    fractional = response.response_q(q_fractional, [[1.0], [0.5]], coordinates="fractional")
+    cartesian = response.response_q(q_cartesian, [[1.0], [0.5]], coordinates="cartesian")
+
+    assert np.allclose(fractional.q_cartesian, q_cartesian)
+    assert np.allclose(fractional.induced_moments, cartesian.induced_moments)
+    assert np.allclose(fractional.source_fields, cartesian.source_fields)
+
+
+def test_pair_complete_j_weighted_downfolding_has_adjoint_cross_blocks_and_hermitian_dressing():
+    model = crystal(
+        [site(1, 2.0), site(2, 0.8)],
+        [
+            ExchangeBond(1, 1, (1.0, 0.0, 0.0), 8.0),
+            ExchangeBond(1, 1, (-1.0, 0.0, 0.0), 8.0),
+            ExchangeBond(2, 2, (1.0, 0.0, 0.0), 0.8),
+            ExchangeBond(2, 2, (-1.0, 0.0, 0.0), 0.8),
+            ExchangeBond(2, 1, (0.5, 0.0, 0.0), 1.2),
+            ExchangeBond(2, 1, (-0.5, 0.0, 0.0), 1.2),
+            ExchangeBond(1, 2, (0.5, 0.0, 0.0), 1.2),
+            ExchangeBond(1, 2, (-0.5, 0.0, 0.0), 1.2),
+        ],
+    )
+    q = [[0.25, 0.0, 0.0]]
+    result = InducedExchangeDownfolding(
+        InducedMomentResponse(model, [1], [2], mode="j_weighted", x=0.5)
+    ).evaluate(q)
+
+    assert np.allclose(result.k_rm, np.swapaxes(result.k_mr.conj(), 1, 2))
+    assert result.dressed_hermiticity.is_hermitian
+    assert not any("K_Mm differs" in warning for warning in result.warnings)
+
+
+def test_induced_toy_nonzero_q_has_no_false_block_adjoint_warning():
+    loaded = load_uppasd("examples/induced_toy/inpsd.dat", energy_unit="meV")
+    response = InducedMomentResponse(loaded.model, [1], [2], mode="j_weighted", x=0.5)
+    result = InducedExchangeDownfolding(response).evaluate([[0.25, 0.0, 0.0]])
+
+    assert result.kernel_hermiticity.is_hermitian
+    assert result.dressed_hermiticity.is_hermitian
+    assert not any("K_Mm differs from K_mM" in warning for warning in result.warnings)
 
 
 def test_convenience_wrapper_is_algebraic_and_does_not_propagate():

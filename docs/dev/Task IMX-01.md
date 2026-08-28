@@ -17,9 +17,11 @@ Implement:
    - isotropic exchange bonds with:
        i, j, Cartesian displacement r_ij, Jij.
    - metadata for energy and length units.
+   - default UppASD energy metadata to mRy, with explicit override support.
 
 2. inpsd.dat parser
    - parse multiline `cell`;
+   - parse optional `alat` length scale in metres;
    - parse `posfile`, `momfile`, `exchange`;
    - resolve paths relative to the directory containing inpsd.dat;
    - ignore unrelated UppASD keywords safely;
@@ -32,7 +34,7 @@ Implement:
 
 4. momfile parser
    Expected minimum:
-       site atom_type moment
+       site moment_field moment
    Optional:
        sx sy sz
 
@@ -48,7 +50,8 @@ Implement:
    - nonzero cell volume;
    - duplicate exchange entries;
    - self interaction at r=0;
-   - mismatch between posfile and momfile;
+   - use the posfile species/type column for site identity; do not interpret
+     the momfile metadata field as a species mismatch;
    - missing moment data;
    - identify likely +/-R partners;
    - report whether real-space interactions appear Hermitian/pair complete.
@@ -87,6 +90,7 @@ printing:
 Checklist:
 [ ] Internal model implemented.
 [ ] inpsd parser implemented.
+[x] optional alat scaling implemented.
 [ ] posfile parser implemented.
 [ ] momfile parser implemented.
 [ ] Jij parser implemented.

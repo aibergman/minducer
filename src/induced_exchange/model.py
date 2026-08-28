@@ -152,8 +152,23 @@ class MagneticCrystal:
         return np.asarray([bond.distance for bond in self.exchange_bonds], dtype=float)
 
 
-def _bond_key(bond: ExchangeBond, *, decimals: int = 10) -> tuple[int, int, tuple[float, float, float]]:
-    return (bond.i, bond.j, tuple(round(value, decimals) for value in bond.displacement))
+def _cell_is_degenerate(cell: np.ndarray) -> bool:
+    """Return whether a cell is singular relative to its own length scale."""
+
+    scale = float(np.max(np.linalg.norm(cell, axis=1), initial=0.0))
+    if scale <= 0.0:
+        return True
+    return abs(float(np.linalg.det(cell))) <= 1e-14 * scale**3
+
+
+def _bond_key(
+    bond: ExchangeBond,
+    *,
+    decimals: int = 10,
+    length_scale: float = 1.0,
+) -> tuple[int, int, tuple[float, float, float]]:
+    normalized = np.asarray(bond.displacement, dtype=float) / length_scale
+    return (bond.i, bond.j, tuple(round(float(value), decimals) for value in normalized))
 
 
 def validate_model(model: MagneticCrystal, report: ValidationReport | None = None) -> ValidationReport:
@@ -162,8 +177,11 @@ def validate_model(model: MagneticCrystal, report: ValidationReport | None = Non
     report = report or ValidationReport()
     if not np.isfinite(model.cell).all():
         report.add_error("nonfinite_cell", "cell contains a non-finite value")
-    if model.cell_volume <= 1e-14:
+    if _cell_is_degenerate(model.cell):
         report.add_error("zero_cell_volume", "cell has zero (or numerically zero) volume")
+    cell_scale = float(np.max(np.linalg.norm(model.cell, axis=1), initial=0.0))
+    if not np.isfinite(cell_scale) or cell_scale <= 0.0:
+        cell_scale = 1.0
 
     indices = model.site_indices
     if len(indices) != len(model.sites):
@@ -188,9 +206,9 @@ def validate_model(model: MagneticCrystal, report: ValidationReport | None = Non
             report.add_error("invalid_site_index", f"exchange bond ({bond.i}, {bond.j}) references an unknown site")
         if not np.isfinite(bond.displacement).all() or not np.isfinite(bond.jij):
             report.add_error("nonfinite_exchange", f"exchange bond on line {bond.source_line or '?'} is non-finite")
-        if bond.i == bond.j and bond.distance <= 1e-14:
+        if bond.i == bond.j and bond.distance <= 1e-14 * cell_scale:
             report.add_warning("self_interaction", f"zero-displacement self interaction for site {bond.i}", line=bond.source_line)
-        key = _bond_key(bond)
+        key = _bond_key(bond, length_scale=cell_scale)
         if key in seen:
             report.duplicate_bonds.append(bond)
             report.add_warning("duplicate_exchange", f"duplicate exchange entry for ({bond.i}, {bond.j}, {bond.displacement})", line=bond.source_line)
@@ -200,7 +218,11 @@ def validate_model(model: MagneticCrystal, report: ValidationReport | None = Non
     missing: list[ExchangeBond] = []
     mismatched: list[tuple[ExchangeBond, ExchangeBond]] = []
     for bond in model.exchange_bonds:
-        reciprocal_key = (bond.j, bond.i, tuple(round(-value, 10) for value in bond.displacement))
+        reciprocal_key = (
+            bond.j,
+            bond.i,
+            tuple(round(float(-value / cell_scale), 10) for value in bond.displacement),
+        )
         reciprocal = seen.get(reciprocal_key)
         if reciprocal is None:
             missing.append(bond)

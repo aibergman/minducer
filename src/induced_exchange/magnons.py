@@ -17,12 +17,14 @@ The classical magnetic-moment equation is
 where ``mu_a`` is the numerical moment in mu_B.  Therefore the energy-valued
 FM dynamical matrix is
 
-    D(q) = g M^(-1/2) A(q) M^(-1/2).
+    D(q) = g^2 M^(-1/2) A(q) M^(-1/2).
 
-The mu_B factors cancel because both the supplied moments and the magnetic
-moment in the equation are expressed in mu_B.  ``g_factor`` is exposed rather
-than hidden; its default is the conventional electron value 2.0.  The
-eigenvalues of ``D`` are hbar*omega in the exchange-energy unit.
+UppASD's AMS implementation applies the product of the site Landé factors to
+each dynamical-matrix element.  For the global ``g_factor`` supported here,
+that is ``g_factor**2``; its default is UppASD's conventional value 2.0.  The
+mu_B factors cancel because both the supplied moments and the magnetic moment
+in the equation are expressed in mu_B.  The eigenvalues of ``D`` are
+hbar*omega in the exchange-energy unit.
 
 Induced sites never enter this dynamical basis.  A Polesya/slave calculation
 uses the dressed robust matrix after analytical elimination, so its physical
@@ -119,9 +121,11 @@ def fm_dynamical_matrix(
 ) -> np.ndarray:
     """Return the energy-valued, moment-normalized FM dynamical matrix.
 
-    The result is ``g_factor * energy_scale * M^-1/2 A M^-1/2``.  The
-    symmetric normalization is similar to the direct LLG matrix
-    ``g M^-1 A`` but is Hermitian whenever the exchange input is Hermitian.
+    The result is ``g_factor**2 * energy_scale * M^-1/2 A M^-1/2``.  This
+    matches UppASD AMS, which applies the product of the site Landé factors to
+    each matrix element.  The symmetric normalization is similar to the
+    direct LLG matrix ``g M^-1 A`` but is Hermitian whenever the exchange input
+    is Hermitian.
     """
 
     matrix = np.asarray(exchange_matrix, dtype=complex)
@@ -132,7 +136,7 @@ def fm_dynamical_matrix(
         raise ValueError("energy_scale must be finite and positive")
     harmonic = fm_harmonic_matrix(matrix, exchange_at_gamma)
     inv_sqrt = np.diag(1.0 / np.sqrt(moments))
-    return float(g_factor * energy_scale) * (inv_sqrt @ harmonic @ inv_sqrt)
+    return float(g_factor * g_factor * energy_scale) * (inv_sqrt @ harmonic @ inv_sqrt)
 
 
 @dataclass(frozen=True)
@@ -329,7 +333,7 @@ def plot_magnon_path(
             ax.set_xticks(data["tick_distances"], data["tick_labels"])
         else:
             ax.set_xticks(data["tick_distances"])
-    ax.set_xlabel("q-path distance")
+    ax.set_xlabel("q-path")
     ax.set_ylabel(f"magnon energy ({result.energy_unit})")
     return ax
 

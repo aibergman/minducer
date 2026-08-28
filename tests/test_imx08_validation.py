@@ -36,12 +36,14 @@ def crystal(sites, bonds, cell=None) -> MagneticCrystal:
 
 
 def robust_induced_model(jr: float, jc: float, induced_self: float = 0.0) -> MagneticCrystal:
-    # The four cross rows make K_mM(q) = 2 jc cos(2 pi q_x), with its
-    # Hermitian reciprocal block supplied explicitly.
+    # The four cross rows make K_mM(q) = 2 jc cos(pi q_x), with its
+    # Hermitian reciprocal block supplied explicitly.  The half-cell
+    # displacement makes the induced correction strong at Gamma and cancel
+    # at the zone boundary in fixture B.
     bonds = [
         bond(1, 1, (1, 0, 0), jr), bond(1, 1, (-1, 0, 0), jr),
-        bond(2, 1, (1, 0, 0), jc), bond(2, 1, (-1, 0, 0), jc),
-        bond(1, 2, (1, 0, 0), jc), bond(1, 2, (-1, 0, 0), jc),
+        bond(2, 1, (0.5, 0, 0), jc), bond(2, 1, (-0.5, 0, 0), jc),
+        bond(1, 2, (0.5, 0, 0), jc), bond(1, 2, (-0.5, 0, 0), jc),
     ]
     if induced_self:
         bonds.append(bond(2, 2, (0, 0, 0), induced_self))

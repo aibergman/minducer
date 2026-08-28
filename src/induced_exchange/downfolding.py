@@ -217,6 +217,11 @@ class DressedExchangeRealSpace:
     warnings: tuple[str, ...] = ()
     raw_values: np.ndarray | None = None
     delta_values: np.ndarray | None = None
+    # The robust-row/induced-column cross block on the same displacement grid.
+    # It is retained separately because it is not part of the dressed
+    # robust-space matrix, but is useful for comparing exchange channels.
+    cross_values: np.ndarray | None = None
+    induced_site_indices: tuple[int, ...] = ()
 
     @property
     def jij(self) -> np.ndarray:
@@ -227,11 +232,14 @@ class DressedExchangeRealSpace:
         """Summarize raw, induced, and dressed strengths by radial shell."""
 
         radii = np.linalg.norm(self.displacements, axis=1)
+        scale = max(float(np.max(radii, initial=0.0)), 1.0e-300)
+        normalized_radii = radii / scale
         diagnostics: list[dict[str, float | int]] = []
-        for radius in sorted({round(float(value), 10) for value in radii}):
-            selected = np.isclose(radii, radius, atol=1e-10, rtol=1e-8)
-            entry: dict[str, float | int] = {"radius": float(radius), "displacement_count": int(np.count_nonzero(selected))}
-            for label, data in (("dressed", self.values), ("raw", self.raw_values), ("delta_induced", self.delta_values)):
+        for normalized_radius in sorted({round(float(value), 8) for value in normalized_radii}):
+            selected = np.isclose(normalized_radii, normalized_radius, atol=1e-8, rtol=0.0)
+            radius = float(np.mean(radii[selected]))
+            entry: dict[str, float | int] = {"radius": radius, "displacement_count": int(np.count_nonzero(selected))}
+            for label, data in (("dressed", self.values), ("raw", self.raw_values), ("delta_induced", self.delta_values), ("cross", self.cross_values)):
                 if data is not None:
                     entry[f"{label}_max_abs"] = float(np.max(np.abs(data[selected]), initial=0.0))
             diagnostics.append(entry)
@@ -247,6 +255,9 @@ class DressedExchangeRealSpace:
             "raw_J_imag": None if self.raw_values is None else self.raw_values.imag.tolist(),
             "delta_J_real": None if self.delta_values is None else self.delta_values.real.tolist(),
             "delta_J_imag": None if self.delta_values is None else self.delta_values.imag.tolist(),
+            "cross_J_real": None if self.cross_values is None else self.cross_values.real.tolist(),
+            "cross_J_imag": None if self.cross_values is None else self.cross_values.imag.tolist(),
+            "induced_site_indices": list(self.induced_site_indices),
             "q_count": self.q_count,
             "shell_diagnostics": self.shell_diagnostics,
             "warnings": list(self.warnings),
@@ -522,6 +533,7 @@ def inverse_fourier_dressed_jij(
     values = np.einsum("qij,qd->dij", result.dressed, phases) / len(result.q_cartesian)
     raw_values = np.einsum("qij,qd->dij", result.raw_robust, phases) / len(result.q_cartesian)
     delta_values = np.einsum("qij,qd->dij", result.delta_induced, phases) / len(result.q_cartesian)
+    cross_values = np.einsum("qij,qd->dij", result.k_rm, phases) / len(result.q_cartesian)
     warnings = [
         "inverse-transformed dressed Jij are finite-q reconstructions, not unique real-space interactions outside the sampled resolution",
     ]
@@ -535,13 +547,15 @@ def inverse_fourier_dressed_jij(
         elif any(count < 2 for count in unique_counts):
             warnings.append("at least one reciprocal direction is sampled only once; real-space range is unresolved along that direction")
     return DressedExchangeRealSpace(
-        displacements_array,
-        values,
-        result.robust_sites,
-        len(result.q_cartesian),
-        tuple(warnings),
-        raw_values,
-        delta_values,
+        displacements=displacements_array,
+        values=values,
+        site_indices=result.robust_sites,
+        q_count=len(result.q_cartesian),
+        warnings=tuple(warnings),
+        raw_values=raw_values,
+        delta_values=delta_values,
+        cross_values=cross_values,
+        induced_site_indices=result.induced_sites,
     )
 
 

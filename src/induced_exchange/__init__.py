@@ -80,6 +80,7 @@ from .magnons import (
     spin_wave_spectrum,
 )
 from .units import convert_energy, energy_conversion_factor, normalise_energy_unit
+from .symmetry import SymmetryExpansionError, SymmetryExpansionReport, SymmetryExpansionResult, expand_exchange_symmetry
 from .provenance import HAMILTONIAN_CONVENTION, K_APPROXIMATION, build_analysis_provenance
 from .comparison import (
     DatasetAnalysis,
@@ -175,6 +176,10 @@ __all__ = [
     "magnon_path_data",
     "plot_magnon_path",
     "normalise_energy_unit",
+    "SymmetryExpansionError",
+    "SymmetryExpansionReport",
+    "SymmetryExpansionResult",
+    "expand_exchange_symmetry",
     "HAMILTONIAN_CONVENTION",
     "K_APPROXIMATION",
     "build_analysis_provenance",

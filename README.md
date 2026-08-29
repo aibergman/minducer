@@ -2,14 +2,14 @@
 title: Induced-Moment Exchange Explorer
 emoji: 🧲
 colorFrom: indigo
-colorTo: teal
+colorTo: green
 sdk: gradio
 sdk_version: 5.50.0
 python_version: "3.10"
 app_file: app.py
 license: gpl-3.0
 fullWidth: true
-short_description: Explore UppASD exchange, induced response, downfolding, and FM magnons.
+short_description: Explore UppASD exchange, induced moments, and magnons.
 ---
 
 # Induced-Moment Exchange Explorer

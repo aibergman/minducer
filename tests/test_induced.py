@@ -28,9 +28,11 @@ def test_one_robust_one_induced_infers_x_and_evaluates_slave_moment():
     response = InducedMomentResponse(model, [1], [2], mode="j_weighted")
 
     inference = response.infer_x()
-    assert np.isclose(inference.x[2], 0.25)
-    assert np.isclose(inference.source_fields[2], 6.0)
-    assert np.allclose(response.response_real_space([4.0]).induced_moments, [2.0])
+    assert np.isclose(inference.x[2], 0.5)
+    assert np.isclose(inference.source_fields[2], 2.0)
+    # The response API uses dimensionless robust orientation amplitudes and
+    # returns normalized induced polarization p=m/|m0|.
+    assert np.allclose(response.response_real_space([4.0]).induced_moments, [4.0])
 
 
 def test_historical_equal_neighbours_parallel_and_antiparallel_cancel():
@@ -56,8 +58,8 @@ def test_unequal_j_weights_are_used_in_reference_inference_and_response():
     )
     response = InducedMomentResponse(model, [1, 2], [3])
 
-    assert np.isclose(response.infer_x().x[3], 1.0)
-    assert np.allclose(response.response_real_space([1.0, 2.0]).induced_moments, [4.0])
+    assert np.isclose(response.infer_x().x[3], 1.0 / 3.0)
+    assert np.allclose(response.response_real_space([1.0, 2.0]).induced_moments, [4.0 / 3.0])
 
 
 def test_finite_induced_induced_coupling_matches_direct_matrix_solution():

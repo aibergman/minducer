@@ -151,6 +151,25 @@ class MagneticCrystal:
     def bond_distances(self) -> np.ndarray:
         return np.asarray([bond.distance for bond in self.exchange_bonds], dtype=float)
 
+    def exchange_energy(self, spin_directions: Any) -> float:
+        """Return the native UppASD ordered-pair exchange energy."""
+
+        from .conventions import uppasd_exchange_energy
+
+        return uppasd_exchange_energy(self, spin_directions)
+
+    def hamiltonian_energy(self, spin_directions: Any) -> float:
+        """Alias for :meth:`exchange_energy`."""
+
+        return self.exchange_energy(spin_directions)
+
+    def local_exchange_field(self, spin_directions: Any, *, moment_magnitudes: Any = None) -> np.ndarray:
+        """Return the ordered-pair exchange field coefficient."""
+
+        from .conventions import local_exchange_field
+
+        return local_exchange_field(self, spin_directions, moment_magnitudes=moment_magnitudes)
+
 
 def _cell_is_degenerate(cell: np.ndarray) -> bool:
     """Return whether a cell is singular relative to its own length scale."""

@@ -133,8 +133,8 @@ def test_space_plot_labels_explain_path_and_response_normalization():
     response_figure = _figure_response(session)
     assert "high-symmetry path" in exchange_figure.axes[0].get_title()
     assert exchange_figure.axes[0].get_xlabel() == "q-path"
-    assert "m_ind(Γ)" in response_figure.axes[0].get_title()
-    assert "normalized induced" in response_figure.axes[0].get_ylabel()
+    assert "p_ind(Γ)" in response_figure.axes[0].get_title()
+    assert "normalized induced polarization" in response_figure.axes[0].get_ylabel()
     assert "coherent unit-amplitude" in response_markdown(session)
 
 

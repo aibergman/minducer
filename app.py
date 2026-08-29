@@ -144,7 +144,7 @@ def build_demo():
                     analyze_button = gr.Button("Run analysis", variant="primary")
 
             with gr.Tab("2 · Raw exchange"):
-                gr.Markdown("### Raw rigid-site exchange\nAll supplied sites and Jij rows are retained. The ordering diagnostic is the largest eigenvalue of J(q) under `H = −1/2 Σ Jij eᵢ·eⱼ`. The scan is restricted to the seekpath high-symmetry path (or the explicitly labelled fallback path if seekpath cannot classify the structure); it is not a global 3-D ordering search.")
+                gr.Markdown("### Raw rigid-site exchange\nAll supplied sites and literal UppASD jfile Jij rows are retained. The ordering diagnostic is the largest eigenvalue of J(q) under the UppASD ordered-pair convention `H = −Σᵢ≠ⱼ Jij eᵢ·eⱼ`. The scan is restricted to the seekpath high-symmetry path (or the explicitly labelled fallback path if seekpath cannot classify the structure); it is not a global 3-D ordering search.")
                 raw_ordering = gr.Markdown("Load an input set and run analysis.")
                 with gr.Row():
                     distance_plot = gr.Plot(label="Jij versus distance")
@@ -155,16 +155,16 @@ def build_demo():
                 gr.Markdown("### Induced/slave response\nClassify sites explicitly in the Input tab. The induced response is algebraic and instantaneous; induced sites are not independent LLG/LSWT degrees of freedom. The response panel uses a coherent unit-amplitude robust spin spiral along the same seekpath high-symmetry path.")
                 with gr.Row():
                     response_mode = gr.Radio([("J-weighted approximation", "j_weighted"), ("Historical unweighted", "historical")], value="j_weighted", label="Response model")
-                    x_override = gr.Textbox(label="X override", placeholder="blank = infer · e.g. 0.12 or 2:0.12, 3:0.08", info="X is susceptibility-like, not m_ind.")
+                    x_override = gr.Textbox(label="X override", placeholder="blank = infer · e.g. 0.12 or 2:0.12, 3:0.08", info="J-weighted mode: X has inverse-energy units and p_ind = X K e, where p_ind = m_ind/|m_ind⁰|.")
                     include_induced = gr.Checkbox(value=True, label="Include induced–induced propagation")
                 response_recompute = gr.Button("Recompute response and dressing", variant="primary")
                 response_info = gr.Markdown()
                 with gr.Row():
-                    response_plot = gr.Plot(label="m_ind(q) / m_ind(Γ) · coherent spiral")
-                    inference_table = gr.Dataframe(headers=["site", "m_ref", "source field", "X", "warnings"], row_count=1, label="X inference and source-field normalization", interactive=False)
+                    response_plot = gr.Plot(label="p_ind(q) / p_ind(Γ) · coherent spiral")
+                    inference_table = gr.Dataframe(headers=["site", "m_ref (mu_B)", "source field (energy)", "X (1/energy)", "warnings"], row_count=1, label="X inference and source-field normalization", interactive=False)
 
             with gr.Tab("4 · Dressed exchange"):
-                gr.Markdown("### Robust-space exchange after induced-moment elimination\nThe induced contribution is a model-dependent correction using the selected response approximation. `J_eff(q)` is the Fourier-space matrix in the robust basis; the q-plot shows its leading eigenvalue. For one robust site (such as Fe with Pt treated as induced), this matrix is a scalar. The first real-space plot uses shell means to compare the direct `J_MM(r)`, cross-block `J_Mm(r) = K_Mm(r)`, Mryasov/downfolded `J_Mryasov(r)`, and Polesya/slave `J_Polesya(r)` channels. With the same static response model, the last two are numerically equivalent and are shown with separate labels. The induced correction `ΔJ_induced(r)` and its relative value `ΔJ_induced(r) / J_MM(r)` are plotted separately below. Real-space x-axes use the implicit UppASD lattice parameter convention (`alat = 1`), while all curves are reconstructed from a separate complete q mesh; moment normalization remains separate in the magnon calculation.")
+                gr.Markdown("### Robust-space exchange after induced-moment elimination\nThe induced contribution is a model-dependent correction using the selected response approximation. `J_eff(q)` is the Fourier-space matrix in the robust basis; the q-plot shows its leading eigenvalue. For one robust site (such as Fe with Pt treated as induced), this matrix is a scalar. The first real-space plot uses shell means to compare the direct `J_RR(r)`, cross-block `K_RI(r)`, Mryasov/downfolded `J_Mryasov(r)`, and Polesya/slave `J_Polesya(r)` channels. With the same static response model, the last two are numerically equivalent and are shown with separate labels. The induced correction `ΔJ_induced(r)` and its relative value `ΔJ_induced(r) / J_RR(r)` are plotted separately below. Real-space x-axes use the implicit UppASD lattice parameter convention (`alat = 1`), while all curves are reconstructed from a separate complete q mesh; moment normalization remains separate in the magnon calculation. The exported `dressed_jfile` is directly compatible with UppASD's ordered-pair convention.")
                 dressed_info = gr.Markdown()
                 with gr.Row():
                     dressed_plot = gr.Plot(label="Robust-space J_eff(q) · high-symmetry path")
@@ -204,7 +204,7 @@ def build_demo():
 
                 **Reciprocal sampling.** The exchange, response, dressed-exchange, and magnon plots share a seekpath high-symmetry path. The dressed real-space channel, absolute-correction, and relative-correction plots are reconstructed from a separate complete auxiliary mesh and are not inferred from that line.
 
-                **Important limitation.** Conventional input Jij are not, by themselves, an exact first-principles susceptibility or induction kernel. Results depend on the explicit classification, X values, response mode, and conditioning of `I − X K_mm`.
+                **Important limitation.** Conventional input Jij are not, by themselves, an exact first-principles susceptibility or induction kernel. Results depend on the explicit classification, X values, response mode, and conditioning of `I − X K_II`.
 
                 The conceptual foundations are discussed in Mryasov *et al.* on induced moments and two-ion anisotropy in FePt, and Polesya *et al.* on induced moments in FePd/CoPt. See the repository README for the scope and citations. Unsupported cases are flagged rather than silently converted: noncollinear order, AF/ferrimagnetic LSWT, DMI, exchange tensors, SOC, anisotropy, and frequency-dependent susceptibility.
                 """)

@@ -59,6 +59,7 @@ from .downfolding import (
     inverse_dressed_exchange,
     inverse_fourier_dressed_jij,
     mryasov_downfold,
+    write_uppasd_jfile,
 )
 from .magnons import (
     FMSpinWaveResult,
@@ -80,8 +81,22 @@ from .magnons import (
     spin_wave_spectrum,
 )
 from .units import convert_energy, energy_conversion_factor, normalise_energy_unit
+from .conventions import (
+    UPPASD_HAMILTONIAN_CONVENTION,
+    UPPASD_HAMILTONIAN_FORMULA,
+    convert_exchange_to_uppasd,
+    exchange_energy,
+    exchange_field,
+    hamiltonian_energy,
+    local_exchange_field,
+    mean_field_curie_energy,
+    mean_field_curie_temperature,
+    mft_curie_energy,
+    to_uppasd_jij,
+    uppasd_exchange_energy,
+)
 from .symmetry import SymmetryExpansionError, SymmetryExpansionReport, SymmetryExpansionResult, expand_exchange_symmetry
-from .provenance import HAMILTONIAN_CONVENTION, K_APPROXIMATION, build_analysis_provenance
+from .provenance import HAMILTONIAN_CONVENTION, HAMILTONIAN_FORMULA, K_APPROXIMATION, build_analysis_provenance
 from .comparison import (
     DatasetAnalysis,
     DatasetComparison,
@@ -161,6 +176,7 @@ __all__ = [
     "inverse_dressed_exchange",
     "inverse_fourier_dressed_jij",
     "mryasov_downfold",
+    "write_uppasd_jfile",
     "FMSpinWaveResult",
     "SpinStiffnessResult",
     "compute_magnon_spectrum",
@@ -176,11 +192,24 @@ __all__ = [
     "magnon_path_data",
     "plot_magnon_path",
     "normalise_energy_unit",
+    "UPPASD_HAMILTONIAN_CONVENTION",
+    "UPPASD_HAMILTONIAN_FORMULA",
+    "convert_exchange_to_uppasd",
+    "exchange_energy",
+    "exchange_field",
+    "hamiltonian_energy",
+    "local_exchange_field",
+    "mean_field_curie_energy",
+    "mean_field_curie_temperature",
+    "mft_curie_energy",
+    "to_uppasd_jij",
+    "uppasd_exchange_energy",
     "SymmetryExpansionError",
     "SymmetryExpansionReport",
     "SymmetryExpansionResult",
     "expand_exchange_symmetry",
     "HAMILTONIAN_CONVENTION",
+    "HAMILTONIAN_FORMULA",
     "K_APPROXIMATION",
     "build_analysis_provenance",
     "DatasetAnalysis",

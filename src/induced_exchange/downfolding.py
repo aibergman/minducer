@@ -1,27 +1,37 @@
 r"""Variational induced-moment downfolding.
 
 The downfolding in this module is derived from one quadratic energy functional,
-rather than from the response formula by pattern matching.  With the fixed
-exchange convention ``H = -1/2 M^\dagger J_MM M`` we use
+rather than from the response formula by pattern matching.  We use robust
+orientation amplitudes ``r`` and normalized induced polarizations ``p``.  With
+the fixed UppASD ordered-pair exchange convention, the quadratic functional is
 
 .. math::
 
-   E(M,m) = -\tfrac12 M^\dagger J_{MM} M
-       + \tfrac12 m^\dagger (X^{-1}-K_{mm})m
-       - \operatorname{Re}(m^\dagger K_{mM}M).
+   E(r,p) = -r^\dagger J_{RR} r
+       + p^\dagger (X^{-1}-K_{II})p
+       - 2\operatorname{Re}(p^\dagger K_{IR}r).
+
+Here ``J_RR`` and ``K_II`` are ordered-pair matrices, so their quadratic
+forms already contain both directed rows.  The cross term explicitly contains
+the two ordered blocks ``K_IR`` and ``K_RI=K_IR^\dagger``.  The local
+restoring term has no pair-counting factor; it is the quadratic cost defining
+the susceptibility-like ``X``.
 
 Stationarity gives
 
 .. math::
 
-   m^* = (X^{-1}-K_{mm})^{-1}K_{mM}M
-       = (I-XK_{mm})^{-1}XK_{mM}M.
+   p^* = (X^{-1}-K_{II})^{-1}K_{IR}r
+       = (I-XK_{II})^{-1}XK_{IR}r.
 
-Substitution gives ``E_eff = -1/2 M^dagger J_eff M`` with
+Substitution gives ``E_eff = -r^dagger J_eff r`` with
 
 .. math::
 
-   J_eff = J_MM + K_{Mm}(X^{-1}-K_{mm})^{-1}K_{mM}.
+   J_eff = J_RR + K_{RI}(X^{-1}-K_{II})^{-1}K_{IR}.
+
+Thus the Schur-complement matrix is already in UppASD ``Jij`` normalization;
+there is no additional factor of two or one-half when it is exported.
 
 The second form of the stationary operator is used numerically because it is
 well-defined in the continuous ``X -> 0`` limit.  ``K = J_input`` remains the
@@ -34,6 +44,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 import json
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -126,7 +137,11 @@ class DownfoldingResult:
 
     @property
     def Xi(self) -> np.ndarray:
-        """The finite ``(I-X K_mm)^-1 X`` stationary response operator."""
+        """The stationary response operator ``Xi`` with units ``1/energy``.
+
+        It maps the energy-valued induced source ``K_IR r`` to the
+        dimensionless polarization ``p``.
+        """
 
         return self.response_operator
 
@@ -383,12 +398,15 @@ class InducedExchangeDownfolding:
         if np.any(solve_failed):
             delta[solve_failed] = np.nan + 0j
             dressed[solve_failed] = np.nan + 0j
+        # The input displacement support is also the safest default support
+        # for a native jfile export.  It includes cross-only models where the
+        # robust block has no direct real-space row; the inverse transform is
+        # still explicitly labelled as a finite reconstruction.
         source_displacements = tuple(
             sorted(
                 {
                     tuple(float(value) for value in bond.displacement)
                     for bond in self.response.model.exchange_bonds
-                    if bond.i in self.robust_sites and bond.j in self.robust_sites
                 }
             )
         )
@@ -446,10 +464,13 @@ class InducedExchangeDownfolding:
         warnings: list[str] = []
         for q_index in range(n_q):
             a_matrix: np.ndarray | None
-            if len(x_values) == 0:
-                a_matrix = np.zeros((0, 0), dtype=complex)
-            elif np.any(np.abs(x_values) <= 1e-15):
+            active = np.flatnonzero(np.abs(x_values) > 1e-15)
+            if len(active) == 0:
                 if np.any(np.abs(induced[q_index]) > atol):
+                    raise ValueError("an explicit nonzero induced configuration is undefined for X=0")
+                a_matrix = None
+            elif len(active) != len(x_values):
+                if np.any(np.abs(induced[q_index, np.setdiff1d(np.arange(len(x_values)), active)]) > atol):
                     raise ValueError("an explicit nonzero induced configuration is undefined for X=0")
                 a_matrix = None
             else:
@@ -458,10 +479,23 @@ class InducedExchangeDownfolding:
                 m = induced[q_index, :, component]
                 robust = values[q_index, :, component]
                 field = result.k_mr[q_index] @ robust
-                raw_term = -0.5 * np.vdot(robust, result.raw_robust[q_index] @ robust).real
-                induced_term = 0.0 if a_matrix is None else 0.5 * np.vdot(m, a_matrix @ m).real - np.vdot(m, field).real
+                # All exchange quadratic forms use the native ordered-pair
+                # convention.  The cross term below is the sum of the two
+                # adjoint ordered blocks, hence the explicit factor 2.
+                raw_term = -np.vdot(robust, result.raw_robust[q_index] @ robust).real
+                if len(active) == 0:
+                    induced_term = 0.0
+                elif a_matrix is None:
+                    active_matrix = np.diag(1.0 / x_values[active]) - result.k_mm[q_index][np.ix_(active, active)]
+                    induced_term = (
+                        np.vdot(m[active], active_matrix @ m[active]).real
+                        - 2.0 * np.vdot(m[active], field[active]).real
+                    )
+                else:
+                    if len(active) == len(x_values):
+                        induced_term = np.vdot(m, a_matrix @ m).real - 2.0 * np.vdot(m, field).real
                 explicit[q_index] += float(raw_term + induced_term)
-                downfolded[q_index] += float(-0.5 * np.vdot(robust, result.dressed[q_index] @ robust).real)
+                downfolded[q_index] += float(-np.vdot(robust, result.dressed[q_index] @ robust).real)
         error = np.abs(explicit - downfolded)
         scale = np.maximum(1.0, np.maximum(np.abs(explicit), np.abs(downfolded)))
         equivalent = bool(np.all(error <= atol + rtol * scale))
@@ -524,7 +558,7 @@ def inverse_fourier_dressed_jij(
     else:
         displacements_array = np.asarray(displacements, dtype=float)
     if displacements_array.size == 0:
-        raise ValueError("no displacements supplied and no robust-robust source displacements are available")
+        raise ValueError("no displacements supplied and no source exchange displacements are available")
     if displacements_array.ndim == 1:
         displacements_array = displacements_array.reshape(1, 3)
     if displacements_array.ndim != 2 or displacements_array.shape[1] != 3 or not np.isfinite(displacements_array).all():
@@ -557,6 +591,53 @@ def inverse_fourier_dressed_jij(
         cross_values=cross_values,
         induced_site_indices=result.induced_sites,
     )
+
+
+def write_uppasd_jfile(
+    path: str | Path,
+    real_space: DressedExchangeRealSpace,
+    *,
+    include_distance: bool = False,
+    atol: float = 1e-10,
+    rtol: float = 1e-8,
+) -> Path:
+    """Write reconstructed dressed exchange in native UppASD jfile format.
+
+    The robust-site indices are written as the jfile ``i``/``j`` columns and
+    every real-space displacement/matrix entry is written as one ordered row.
+    A significant imaginary residual or non-finite value is rejected because
+    a scalar UppASD jfile cannot represent it.  The resulting ``Jij`` values
+    are already in the ordered-pair convention and require no rescaling.
+    """
+
+    target = Path(path)
+    values = np.asarray(real_space.values, dtype=complex)
+    if values.ndim != 3 or values.shape[0] != len(real_space.displacements):
+        raise ValueError("real_space values do not match the displacement grid")
+    if values.shape[1:] != (len(real_space.site_indices), len(real_space.site_indices)):
+        raise ValueError("real_space values do not match the robust-site indices")
+    if not np.isfinite(values).all():
+        raise ValueError("cannot export non-finite dressed Jij values")
+    scale = max(1.0, float(np.max(np.abs(values), initial=0.0)))
+    imag_error = float(np.max(np.abs(values.imag), initial=0.0))
+    if imag_error > atol + rtol * scale:
+        raise ValueError(f"dressed Jij has a non-negligible imaginary residual ({imag_error:.6g})")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        "# minducer export: UppASD ordered-pair scalar Heisenberg",
+        "# Jij is the literal value for H = -sum_(i!=j) Jij e_i.e_j",
+        "# i j rx ry rz Jij" + (" distance" if include_distance else ""),
+    ]
+    for displacement, matrix in zip(np.asarray(real_space.displacements, dtype=float), values):
+        distance = float(np.linalg.norm(displacement))
+        for row, site_i in enumerate(real_space.site_indices):
+            for column, site_j in enumerate(real_space.site_indices):
+                entry = [int(site_i), int(site_j), *[float(value) for value in displacement], float(matrix[row, column].real)]
+                if include_distance:
+                    entry.append(distance)
+                lines.append(" ".join(f"{value:.16g}" if isinstance(value, float) else str(value) for value in entry))
+    target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return target
 
 
 inverse_dressed_exchange = inverse_fourier_dressed_jij
@@ -596,4 +677,5 @@ __all__ = [
     "inverse_dressed_exchange",
     "inverse_fourier_dressed_jij",
     "mryasov_downfold",
+    "write_uppasd_jfile",
 ]

@@ -36,8 +36,8 @@ def test_one_sublattice_nn_fm_has_analytic_moment_normalized_dispersion():
     q = [[0.0, 0.0, 0.0], [0.25, 0.0, 0.0], [0.5, 0.0, 0.0]]
     result = fm_magnon_spectrum(model, q)
 
-    # UppASD's default Landé product gives hbar*omega = g^2/mu *
-    # [J(0)-J(q)] = 4 * [2 - 2 cos(2 pi h)].
+    # UppASD's ordered-pair curvature and one Landé factor give
+    # hbar*omega = 2*g/mu * [J(0)-J(q)] = 4 * [2 - 2 cos(2 pi h)].
     assert np.allclose(result.energies[:, 0].real, [0.0, 8.0, 16.0])
     assert result.goldstone_ok
     assert result.stable
@@ -104,9 +104,8 @@ def test_uppasd_style_two_rigid_lswt_matches_reference_path():
         rtol=0.0,
     )
 
-    # UppASD's AMS reference is in meV and uses the product of its default
-    # site Landé factors. The library now applies that same g_factor**2
-    # normalization by default.
+    # UppASD's AMS reference is in meV. The library applies the physically
+    # separated ordered-pair factor 2 and one default Landé factor g=2.
     assert result.site_indices == (1, 2)
     assert result.energies.shape == reference.shape
     assert np.allclose(result.energies.real, reference, rtol=2e-7, atol=1e-3)

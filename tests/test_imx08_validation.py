@@ -178,7 +178,11 @@ def test_analysis_export_contains_machine_readable_provenance():
     session = analyse_model(loaded, SublatticeClassification.from_inputs([1], [2]), mesh_size=2, x=0.5)
     exported = json.loads((session.export_dir / "canonical_model.json").read_text(encoding="utf-8"))
     provenance = exported["analysis_provenance"]
-    assert provenance["hamiltonian_convention"].startswith("H = -1/2")
+    assert provenance["hamiltonian_convention"] == "UppASD ordered-pair scalar Heisenberg"
+    assert provenance["hamiltonian_formula"] == "H = -sum_{i!=j} Jij e_i·e_j"
+    assert provenance["pair_counting"] == "ordered"
+    assert provenance["jij_semantics"] == "literal UppASD jfile value"
+    assert provenance["magnon_prefactor_convention"] == "2*g from ordered-pair curvature and gyromagnetic ratio"
     assert provenance["response_mode"] == "j_weighted"
     assert provenance["K_source"] == "input Jij (J-weighted induced-response approximation)"
     assert provenance["classification"] == {"robust_sites": [1], "induced_sites": [2]}

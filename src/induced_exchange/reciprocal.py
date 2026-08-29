@@ -13,11 +13,13 @@ For a reduced reciprocal coordinate ``h`` and a Cartesian coordinate ``q``::
 The Fourier transform uses the displacement on each :class:`ExchangeBond`
 verbatim; basis positions are never used to reconstruct it.
 
-The fixed Hamiltonian convention is ``H = -1/2 sum_ij J_ij e_i dot e_j``.
-Consequently a normalized Fourier mode has energy ``-v^dagger J(q) v / 2``:
-the ordering tendency is associated with the *largest* eigenvalue of ``J(q)``.
-This is an ordering diagnostic, not a claim that the supplied Jij are exact
-first-principles susceptibilities.
+The fixed UppASD Hamiltonian convention is
+``H = -sum_(i != j) Jij e_i dot e_j``.  Consequently a normalized Fourier
+mode has energy proportional to ``-v^dagger J(q) v``: the ordering tendency is
+associated with the *largest* eigenvalue of ``J(q)``.  The Fourier transform
+itself contains no factor of two; the factor belongs to the harmonic
+curvature derived from the Hamiltonian.  This is an ordering diagnostic, not a
+claim that the supplied Jij are exact first-principles susceptibilities.
 """
 
 from __future__ import annotations

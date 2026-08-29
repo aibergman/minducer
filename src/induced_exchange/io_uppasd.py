@@ -1,4 +1,9 @@
-"""UppASD-style input parsing for the IMX-01 input model."""
+"""UppASD-style input parsing for the IMX-01 input model.
+
+Exchange values are read literally from the jfile.  A pair-complete file is
+interpreted with the ordered-pair Hamiltonian ``H=-sum_(i!=j) Jij e_i.e_j``;
+the loader never applies a factor-of-two conversion.
+"""
 
 from __future__ import annotations
 
@@ -265,7 +270,7 @@ def parse_momfile(path: str | Path) -> dict[int, MomentRecord]:
 
 
 def parse_exchange(path: str | Path, *, strict: bool = True, report: ValidationReport | None = None) -> list[ExchangeBond]:
-    """Parse ``i j rx ry rz Jij [distance]`` exchange rows.
+    """Parse literal UppASD ``i j rx ry rz Jij [distance]`` exchange rows.
 
     With ``strict=False``, malformed rows are skipped and added to ``report``.
     The optional distance is diagnostic only; the displacement norm remains

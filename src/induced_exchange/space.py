@@ -17,7 +17,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
 
-from .downfolding import DressedExchangeRealSpace, DownfoldingResult, InducedExchangeDownfolding, inverse_fourier_dressed_jij
+from .downfolding import DressedExchangeRealSpace, DownfoldingResult, InducedExchangeDownfolding, inverse_fourier_dressed_jij, write_uppasd_jfile
 from .induced import InducedMomentResponse, InducedResponseResult, SublatticeClassification, XInferenceResult
 from .io_uppasd import InputFormatError, LoadedUppASD, load_uppasd, parse_inpsd
 from .magnons import FMSpinWaveResult, SpinStiffnessResult, fit_spin_stiffness, fm_magnon_spectrum
@@ -569,6 +569,13 @@ def _write_matrix_csv(path: Path, q: np.ndarray, matrices: np.ndarray, prefix: s
 def _write_exports(session: AnalysisSession) -> None:
     target = Path(tempfile.mkdtemp(prefix="imx_results_"))
     session.export_dir = target
+    dressed_jfile_available = False
+    if session.dressed_real_space is not None and len(session.dressed_real_space.displacements):
+        try:
+            write_uppasd_jfile(target / "dressed_jfile", session.dressed_real_space)
+            dressed_jfile_available = True
+        except (ValueError, OSError) as exc:
+            session.warnings.append(f"native dressed jfile export unavailable: {exc}")
     response = session.response
     x_values = None
     x_source = "not_applicable"
@@ -597,8 +604,9 @@ def _write_exports(session: AnalysisSession) -> None:
             "response_singular_tolerance": None if response is None else response.singular_tolerance,
             "goldstone_relative_tolerance": 1e-8,
         },
+        g_factor=2.0,
     )
-    summary = {"model": _model_dict(session.loaded.model), "validation_report": session.loaded.report.as_dict(), "symmetry_expansion": None if session.loaded.symmetry_expansion is None else session.loaded.symmetry_expansion.as_dict(), "classification": {"robust": list(session.robust_sites), "induced": list(session.induced_sites)}, "q_fractional": session.q_fractional.tolist(), "q_sampling": None if session.path is None else {"kind": "high_symmetry_path", "source": session.path.path.source, "tick_labels": list(session.path.path.tick_labels), "tick_positions": session.path.path.tick_positions.tolist()}, "warnings": list(dict.fromkeys(session.warnings)), "analysis_provenance": provenance}
+    summary = {"model": _model_dict(session.loaded.model), "validation_report": session.loaded.report.as_dict(), "symmetry_expansion": None if session.loaded.symmetry_expansion is None else session.loaded.symmetry_expansion.as_dict(), "classification": {"robust": list(session.robust_sites), "induced": list(session.induced_sites)}, "q_fractional": session.q_fractional.tolist(), "q_sampling": None if session.path is None else {"kind": "high_symmetry_path", "source": session.path.path.source, "tick_labels": list(session.path.path.tick_labels), "tick_positions": session.path.path.tick_positions.tolist()}, "dressed_jfile_exported": dressed_jfile_available, "warnings": list(dict.fromkeys(session.warnings)), "analysis_provenance": provenance}
     (target / "canonical_model.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     (target / "analysis_provenance.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
     (target / "validation_report.json").write_text(json.dumps(session.loaded.report.as_dict(), indent=2), encoding="utf-8")
@@ -610,14 +618,16 @@ def _write_exports(session: AnalysisSession) -> None:
     if session.response_scan is not None:
         with (target / "response.csv").open("w", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
-            writer.writerow(["q_index", "qx", "qy", "qz", "path_distance", "induced_site", "m_real", "m_imag", "m_over_m0_real", "m_over_m0_imag", "condition_number", "singular"])
+            writer.writerow(["q_index", "qx", "qy", "qz", "path_distance", "induced_site", "p_real", "p_imag", "m_real", "m_imag", "p_over_p_gamma_real", "p_over_p_gamma_imag", "condition_number", "singular"])
             normalized = session.response_scan.m_ind_q_over_m_ind_0
+            physical = session.response_scan.physical_induced_moments
             for qi, point in enumerate(session.q_fractional):
                 for column, site in enumerate(session.response_scan.induced_sites):
                     value = session.response_scan.induced_moments[qi, column]
+                    moment = None if physical is None else physical[qi, column]
                     ratio = None if normalized is None else normalized[qi, column]
                     distance = None if session.path is None else float(session.path.path.distance[qi])
-                    writer.writerow([qi, *point, distance, site, float(value.real), float(value.imag), None if ratio is None else float(ratio.real), None if ratio is None else float(ratio.imag), float(session.response_scan.condition_numbers[qi]), bool(session.response_scan.singular[qi])])
+                    writer.writerow([qi, *point, distance, site, float(value.real), float(value.imag), None if moment is None else float(moment.real), None if moment is None else float(moment.imag), None if ratio is None else float(ratio.real), None if ratio is None else float(ratio.imag), float(session.response_scan.condition_numbers[qi]), bool(session.response_scan.singular[qi])])
     if session.dressed_real_space is not None and len(session.dressed_real_space.displacements):
         real_space = session.dressed_real_space
         with (target / "dressed_jij.csv").open("w", newline="", encoding="utf-8") as handle:
@@ -785,7 +795,7 @@ def _figure_response(session: AnalysisSession) -> Any:
     ax.axhline(1.0, color="#8b98a6", linewidth=0.8, label="_nolegend_")
     if len(tick_positions):
         ax.set_xticks(x[tick_positions], tick_labels)
-    ax.set(xlabel="q-path", ylabel="normalized induced Fourier amplitude", title="Coherent induced response: m_ind(q) / m_ind(Γ)")
+    ax.set(xlabel="q-path", ylabel="normalized induced polarization amplitude", title="Coherent induced response: p_ind(q) / p_ind(Γ)")
     ax.grid(alpha=0.18)
     if session.response_scan.induced_sites:
         ax.legend(frameon=False)
@@ -1036,13 +1046,13 @@ def response_markdown(session: AnalysisSession) -> str:
     if session.response is None:
         return "Classify one or more basis sites as **induced** to enable the response layer."
     path_source = "unknown" if session.path is None else session.path.path.source
-    lines = [f"**Mode:** `{session.response.response_label}`", f"**q sampling:** seekpath high-symmetry path (`{path_source}`)", "", "The plot applies a coherent unit-amplitude robust spin spiral, `M_a(q) = 1`, and shows each induced Fourier amplitude divided by its value at Γ: `m_ind(q) / m_ind(Γ)`. It is a complex response amplitude, not a local induced-moment magnitude or a fraction of the reference moment; solid curves are the real part and dotted curves are the imaginary part.", "", "> **K = input Jij is a response-model approximation, not an exact identity."]
+    lines = [f"**Mode:** `{session.response.response_label}`", f"**q sampling:** seekpath high-symmetry path (`{path_source}`)", "", "The plot applies a coherent unit-amplitude robust orientation spiral, `e_a(q) = 1`, and shows the normalized induced polarization divided by its Gamma value: `p_ind(q) / p_ind(Γ)`, where `p_ind = m_ind / |m_ind^0|`. It is a complex response amplitude, not a local induced-moment magnitude; solid curves are the real part and dotted curves are the imaginary part.", "", "> **K = input Jij is a J-weighted induced-response approximation, not an exact susceptibility identity.**", "> **X units:** inverse energy in the J-weighted mode; X multiplies `K e` to produce dimensionless `p`. Then `m_ind = |m_ind^0| p`."]
     if session.response_scan is not None:
         finite = session.response_scan.condition_numbers[np.isfinite(session.response_scan.condition_numbers)]
         maximum = float(np.max(finite)) if len(finite) else float("inf")
-        lines.append(f"\nConditioning: max cond(I − X K_mm) = `{maximum:.4g}`; singular flags = `{int(np.count_nonzero(session.response_scan.singular))}`.")
+        lines.append(f"\nConditioning: max cond(I − X K_II) = `{maximum:.4g}`; singular flags = `{int(np.count_nonzero(session.response_scan.singular))}`.")
     if session.inference is not None:
-        lines.append("\nInferred X is susceptibility-like (inverse energy), not the induced moment itself.")
+        lines.append("\nInferred X uses `X_nu = p_nu^0 / sum_a K_nu,a e_a^0`; it is susceptibility-like (inverse energy), not the induced moment itself.")
     return "\n".join(lines)
 
 

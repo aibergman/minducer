@@ -297,7 +297,7 @@ class ExternalInducedResponse:
         if widths == {4}:
             array = np.asarray(rows, dtype=float)
             return cls(array[:, 3], q=array[:, :3], source=str(source))
-        raise ValueError(f"{source}: expected either 'path_coordinate m_ind' or 'qx qy qz m_ind'")
+        raise ValueError(f"{source}: expected either 'path_coordinate response' or 'qx qy qz response'")
 
     def __post_init__(self) -> None:
         moments = np.asarray(self.moments, dtype=float)
@@ -333,6 +333,8 @@ class ResponseMismatchMetrics:
 
 @dataclass(frozen=True)
 class InducedResponseComparison:
+    """Comparison of dimensionless induced-polarization responses."""
+
     q_fractional: np.ndarray
     q_cartesian: np.ndarray
     model_a: np.ndarray
@@ -458,7 +460,7 @@ def compare_induced_response(
     external: ExternalInducedResponse | str | Path | None = None,
     mismatch_threshold: float = 0.1,
 ) -> InducedResponseComparison:
-    """Predict ``m_ind(q)`` for both models and optionally compare DFT data."""
+    """Predict normalized ``p_ind(q)`` for both models and compare data."""
 
     if response_a.robust_sites != response_b.robust_sites or response_a.induced_sites != response_b.induced_sites:
         raise ValueError("response classifications must match for an induced-response comparison")
@@ -468,15 +470,21 @@ def compare_induced_response(
         robust_configuration = np.ones((count, len(response_a.robust_sites)), dtype=float)
     result_a = response_a.response_q(q_points, robust_configuration, coordinates=coordinates)
     result_b = response_b.response_q(q_points, robust_configuration, coordinates=coordinates)
-    values_a = _normalise_response_array(result_a.induced_moments)
-    values_b = _normalise_response_array(result_b.induced_moments)
+    # Keep the comparison's primary model values in the selected normalized
+    # polarization variable.  External DFT files conventionally contain
+    # physical induced moments, so use the explicit conversion only for the
+    # physical-data metrics below.
+    values_a = _normalise_response_array(result_a.induced_polarizations)
+    values_b = _normalise_response_array(result_b.induced_polarizations)
+    physical_a = result_a.physical_induced_moments
+    physical_b = result_b.physical_induced_moments
     if external is not None and not isinstance(external, ExternalInducedResponse):
         external = ExternalInducedResponse.from_file(external)
     warnings = list(result_a.warnings) + list(result_b.warnings)
     prediction_a = prediction_b = metrics_a = metrics_b = None
     if external is not None:
-        prediction_a = _external_prediction(external, result_a.q_cartesian, values_a)
-        prediction_b = _external_prediction(external, result_b.q_cartesian, values_b)
+        prediction_a = _external_prediction(external, result_a.q_cartesian, values_a if physical_a is None else physical_a)
+        prediction_b = _external_prediction(external, result_b.q_cartesian, values_b if physical_b is None else physical_b)
         metrics_a = _response_metrics(prediction_a, external.moments, threshold=mismatch_threshold)
         metrics_b = _response_metrics(prediction_b, external.moments, threshold=mismatch_threshold)
         if metrics_a.strongly_disagrees or metrics_b.strongly_disagrees:
@@ -507,7 +515,8 @@ def predict_induced_response(
     """Evaluate one selected response, defaulting to a coherent unit spiral.
 
     The returned :class:`InducedResponseResult` retains individual induced
-    sublattices, condition numbers, and ``m_ind_q_over_m_ind_0``.
+    sublattices, condition numbers, and ``p_ind(q)/p_ind(Gamma)`` under the
+    historical property name ``m_ind_q_over_m_ind_0``.
     """
 
     q_array = np.asarray(q_points, dtype=float)
@@ -767,7 +776,7 @@ class DatasetComparison:
             for q_index in range(len(response.q_fractional)):
                 for dataset_name, values, normalized in ((self.dataset_a.dataset.label, response.model_a, response.model_a_normalized), (self.dataset_b.dataset.label, response.model_b, response.model_b_normalized)):
                     for induced_index in range(values.shape[1]):
-                        rows.append({"dataset": dataset_name, "q_index": q_index, "qx": response.q_fractional[q_index, 0], "qy": response.q_fractional[q_index, 1], "qz": response.q_fractional[q_index, 2], "induced_index": induced_index, "m_ind_real": float(values[q_index, induced_index].real), "m_ind_imag": float(values[q_index, induced_index].imag), "m_ind_over_m0_real": float(normalized[q_index, induced_index].real), "m_ind_over_m0_imag": float(normalized[q_index, induced_index].imag)})
+                        rows.append({"dataset": dataset_name, "q_index": q_index, "qx": response.q_fractional[q_index, 0], "qy": response.q_fractional[q_index, 1], "qz": response.q_fractional[q_index, 2], "induced_index": induced_index, "p_ind_real": float(values[q_index, induced_index].real), "p_ind_imag": float(values[q_index, induced_index].imag), "p_ind_over_p_gamma_real": float(normalized[q_index, induced_index].real), "p_ind_over_p_gamma_imag": float(normalized[q_index, induced_index].imag)})
             tables["induced_response"] = rows
         return tables
 
@@ -965,7 +974,7 @@ def plot_induced_response_comparison(result: DatasetComparison, *, ax: Any | Non
         reference = external[0] if len(external) else 1.0
         ax.plot(np.linspace(float(x[0]), float(x[-1]), len(external)), external / reference, "o", label="DFT response")
     ax.set_xlabel("q-path")
-    ax.set_ylabel("m_ind(q) / m_ind(Γ)")
+    ax.set_ylabel("p_ind(q) / p_ind(Γ)")
     ax.legend()
     return ax
 

@@ -40,11 +40,12 @@ the UI labels the transparent Gamma/boundary fallback path and records the
 limitation in the analysis warnings. The library-level `regular_q_mesh` and
 the low-level APIs remain available for complete reciprocal-space searches.
 
-The induced response plot is the complex Fourier amplitude produced by a
-coherent unit-amplitude robust spin spiral, divided by its Gamma value. It is
-not a local moment magnitude and does not mean that an induced atom carries
-that fraction of its reference moment; real and imaginary parts are shown
-separately when needed.
+The induced response plot is the complex Fourier amplitude of the normalized
+polarization `p=m/|m⁰|` produced by a coherent unit-amplitude robust spin
+spiral, divided by its Gamma value. It is not a local moment magnitude; the
+physical moment is `|m⁰|p` when the reference magnitude is available, and the
+q/Gamma ratio is not itself a local moment ratio. Real and imaginary parts are
+shown separately when needed.
 
 `J_eff(q)` is a matrix in the robust basis (a scalar only for one robust site),
 and the q plot shows its leading eigenvalue. A high-symmetry line cannot
@@ -106,17 +107,17 @@ In the canonical model, species identity is taken from the second column of
 not a species identifier, so it cannot cause spglib to merge Fe/Pt (or any
 other distinct positional species) during expansion.
 
-## Conventions audited for IMX-08
+## Conventions audited for IMX-09
 
 The implementation uses one convention everywhere:
 
 ```text
-H = -1/2 sum_ij Jij e_i dot e_j
+H = -sum_(i != j) Jij e_i dot e_j
 ```
 
-Each input row is one term in that sum. If both reciprocal rows are supplied,
-the factor `1/2` prevents double counting; rows are never silently duplicated
-or symmetrized. The Fourier transform uses the supplied Cartesian
+Each input row is one ordered term in that sum, so a pair-complete file has
+both reciprocal rows; rows are never silently duplicated or symmetrized. The
+Fourier transform uses the supplied Cartesian
 displacement verbatim,
 
 ```text
@@ -129,20 +130,23 @@ reciprocal matrix satisfies `A @ B.T = 2*pi*I`.
 
 For this Hamiltonian, the ordering diagnostic is the **largest** eigenvalue
 of `J(q)`. FM magnons use the moment-normalized matrix
-`g² M^(-1/2) [diag(J(0) 1) - J(q)] M^(-1/2)`, matching UppASD's product of the
-site Landé factors. Induced sites are eliminated and are not added as
-independent magnon branches. Goldstone behavior is checked at Gamma when
-Gamma is present in the supplied mesh.
+`2*g M^(-1/2) [diag(J(0) 1) - J(q)] M^(-1/2)`: the 2 is the ordered-pair
+curvature and `g` is the single Landé factor. Induced sites are eliminated and
+are not added as independent magnon branches. Goldstone behavior is checked at
+Gamma when Gamma is present in the supplied mesh.
 
 The bundled UppASD-style two-site validation matches in meV with the default
 `g_factor=2.0` after expanding the reduced `jfile`; no comparison-only scale is
 needed. A non-default external Landé convention must still be supplied
 explicitly.
 
-`X` is inferred only from the reference collinear state when its source field
-is nonzero. A negative inferred `X`, cancellation, missing reciprocal input,
-non-Hermitian `J(q)`, and ill-conditioned `I - X K_mm(q)` are reported rather
-than hidden.
+The J-weighted response uses dimensionless robust orientations `e` and induced
+polarizations `p=m/|m⁰|`, with `[K]=energy` and `[X]=1/energy`. Its reference
+normalization is `X_nu=p_nu^0/(sum_a K_nu,a e_a^0)`; the induced reference
+moment magnitude only converts `p` back to `m`. `X` is inferred only when its
+source field is nonzero. A negative inferred `X`, cancellation, missing
+reciprocal input, non-Hermitian `J(q)`, and ill-conditioned `I - X K_II(q)` are
+reported rather than hidden.
 
 ## IMX-08 adversarial fixtures
 
@@ -155,10 +159,10 @@ result looks like.
 | A. FM raw -> FM dressed | Robust raw and dressed leading eigenvalue are both at Gamma; induced correction is finite. | None beyond the explicit approximation label. |
 | B. AF raw -> FM dressed | Robust-only raw maximum is at the zone boundary, while a strong finite-q induced correction moves the dressed maximum to Gamma. | The result remains model-dependent; no claim about the true susceptibility. |
 | C. AF raw -> AF dressed | A weak induced correction does not move the zone-boundary maximum. | No numerical warning when the response is well conditioned. |
-| D. Nearly singular response | `I - X K_mm` is solvable but has a very large condition number; the response is correspondingly amplified. | Near-singular/possible soft-response warning; no regularization. |
-| E. Negative inferred susceptibility | `X = m0 / source_field` is negative for inconsistent reference sign data. | Negative-`X` sign/convention warning. |
-| F. Vanishing symmetry-point field | `K_mM(q)` cancels at the selected symmetry point, so the induced response is exactly zero there. | Inference warns if the same cancellation makes reference `X` unavailable; the zero q response itself is physical. |
-| G. Induced-induced near instability | A multi-site `K_mm` block approaches an eigenvalue of `X K_mm` equal to one. | Ill-conditioning/soft-response warning. |
+| D. Nearly singular response | `I - X K_II` is solvable but has a very large condition number; the response is correspondingly amplified. | Near-singular/possible soft-response warning; no regularization. |
+| E. Negative inferred susceptibility | `X = p0 / source_field` is negative for inconsistent reference sign data. | Negative-`X` sign/convention warning. |
+| F. Vanishing symmetry-point field | `K_IR(q)` cancels at the selected symmetry point, so the induced response is exactly zero there. | Inference warns if the same cancellation makes reference `X` unavailable; the zero q response itself is physical. |
+| G. Induced-induced near instability | A multi-site `K_II` block approaches an eigenvalue of `X K_II` equal to one. | Ill-conditioning/soft-response warning. |
 | H. Multiple induced sublattices | The response and downfolding retain both induced components and return a `(n_q, 2)` response / two-by-two induced operator. | None when finite and Hermitian. |
 | I. Nonorthogonal primitive cell | Cartesian phase evaluation agrees with the reciprocal-basis conversion for a nonorthogonal cell. | None; position reconstruction is not used. |
 | J. Asymmetric/incomplete `Jij` | Fourier output remains non-Hermitian and is not repaired; ordering uses the general eigensolver only as a diagnostic. | Missing reciprocal/asymmetric input and uncertified physical spectrum. |

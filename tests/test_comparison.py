@@ -6,6 +6,7 @@ from induced_exchange import (
     ExchangeBond,
     ExchangeDataset,
     ExternalInducedResponse,
+    InducedMomentResponse,
     MagneticCrystal,
     MagneticSite,
     UnitMetadata,
@@ -69,8 +70,6 @@ def test_sign_reversed_dataset_changes_raw_ordering_diagnostic():
 
 def test_response_comparison_matching_and_mismatch_are_quantified():
     model = crystal([bond(2, 1, (0, 0, 0), 2.0), bond(1, 2, (0, 0, 0), 2.0)], moments=(1.0, 1.0))
-    from induced_exchange import InducedMomentResponse
-
     response_a = InducedMomentResponse(model, [1], [2], x=0.5)
     response_b = InducedMomentResponse(model, [1], [2], x=0.5)
     q = [[0.0, 0.0, 0.0], [0.25, 0.0, 0.0]]
@@ -79,6 +78,15 @@ def test_response_comparison_matching_and_mismatch_are_quantified():
     mismatching = compare_induced_response(response_a, response_b, q, [[1.0], [1.0]], external=ExternalInducedResponse([1.0, 2.0], q=np.asarray(q)))
     assert mismatching.metrics_a is not None and mismatching.metrics_a.strongly_disagrees
     assert any("do not reproduce" in warning for warning in mismatching.warnings)
+
+
+def test_response_comparison_converts_normalized_model_response_to_physical_moments():
+    model = crystal([bond(2, 1, (0, 0, 0), 2.0), bond(1, 2, (0, 0, 0), 2.0)], moments=(3.0, 1.5))
+    response = InducedMomentResponse(model, [1], [2], x=0.5)
+    external = ExternalInducedResponse([1.5, 1.5], q=np.asarray([[0.0, 0.0, 0.0], [0.25, 0.0, 0.0]]))
+    result = compare_induced_response(response, response, external.q, [[1.0], [1.0]], external=external)
+    assert np.allclose(result.model_a, [[1.0], [1.0]])
+    assert result.metrics_a is not None and result.metrics_a.rmse == 0.0
 
 
 def test_external_response_file_accepts_both_supported_layouts(tmp_path):

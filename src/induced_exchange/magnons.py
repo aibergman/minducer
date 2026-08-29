@@ -3,28 +3,30 @@
 Only a stable collinear FM reference is treated as a physical spin-wave
 problem here.  The fixed convention is
 
-    H = -1/2 sum_ij J_ij e_i dot e_j.
+    H = -sum_(i != j) J_ij e_i dot e_j.
 
-For transverse complex amplitudes ``u_a`` around ``e_a = z`` the quadratic
-energy is ``1/2 u^dagger A(q) u`` with
+For transverse complex amplitudes ``u_a`` around ``e_a = z`` the exchange
+curvature is ``C(q) = 2 A(q)`` and the quadratic energy is
+``1/2 u^dagger C(q) u = u^dagger A(q) u`` with
 
     A(q) = diag(J(0) 1) - J(q).
 
-The classical magnetic-moment equation is
+The ordered-pair Hamiltonian contributes the factor 2 to the exchange
+curvature.  The classical magnetic-moment equation is
 
     hbar d e_a/dt = -g e_a x dH/d(mu_a e_a),
 
 where ``mu_a`` is the numerical moment in mu_B.  Therefore the energy-valued
 FM dynamical matrix is
 
-    D(q) = g^2 M^(-1/2) A(q) M^(-1/2).
+    D(q) = 2*g M^(-1/2) A(q) M^(-1/2).
 
-UppASD's AMS implementation applies the product of the site Landé factors to
-each dynamical-matrix element.  For the global ``g_factor`` supported here,
-that is ``g_factor**2``; its default is UppASD's conventional value 2.0.  The
-mu_B factors cancel because both the supplied moments and the magnetic moment
-in the equation are expressed in mu_B.  The eigenvalues of ``D`` are
-hbar*omega in the exchange-energy unit.
+There is one Landé factor.  The independent factor 2 is the ordered-pair
+Hamiltonian derivative.  The old ``g_factor**2`` numerical result therefore
+agreed at the default ``g_factor=2`` only.  The mu_B factors cancel because
+both the supplied moments and the magnetic moment in the equation are
+expressed in mu_B.  The eigenvalues of ``D`` are hbar*omega in the
+exchange-energy unit.
 
 Induced sites never enter this dynamical basis.  A Polesya/slave calculation
 uses the dressed robust matrix after analytical elimination, so its physical
@@ -121,11 +123,9 @@ def fm_dynamical_matrix(
 ) -> np.ndarray:
     """Return the energy-valued, moment-normalized FM dynamical matrix.
 
-    The result is ``g_factor**2 * energy_scale * M^-1/2 A M^-1/2``.  This
-    matches UppASD AMS, which applies the product of the site Landé factors to
-    each matrix element.  The symmetric normalization is similar to the
-    direct LLG matrix ``g M^-1 A`` but is Hermitian whenever the exchange input
-    is Hermitian.
+    The result is ``2 * g_factor * energy_scale * M^-1/2 A M^-1/2``.  The
+    symmetric normalization is similar to the direct LLG matrix
+    ``2*g M^-1 A`` but is Hermitian whenever the exchange input is Hermitian.
     """
 
     matrix = np.asarray(exchange_matrix, dtype=complex)
@@ -136,7 +136,7 @@ def fm_dynamical_matrix(
         raise ValueError("energy_scale must be finite and positive")
     harmonic = fm_harmonic_matrix(matrix, exchange_at_gamma)
     inv_sqrt = np.diag(1.0 / np.sqrt(moments))
-    return float(g_factor * g_factor * energy_scale) * (inv_sqrt @ harmonic @ inv_sqrt)
+    return float(2.0 * g_factor * energy_scale) * (inv_sqrt @ harmonic @ inv_sqrt)
 
 
 @dataclass(frozen=True)

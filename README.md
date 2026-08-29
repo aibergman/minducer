@@ -23,6 +23,39 @@ The project is intended for transparent model analysis. It does not infer an
 electronic susceptibility from a conventional `Jij` file or silently repair
 incomplete exchange input.
 
+## UppASD Hamiltonian convention
+
+The native convention is the literal UppASD scalar-Heisenberg `jfile`
+convention:
+
+```text
+H = - sum_(i != j) Jij e_i · e_j
+```
+
+The sum is over ordered pairs, so a pair-complete file contains both `(i,j)`
+and `(j,i)`. Positive `Jij` is ferromagnetic. The parser stores the numerical
+`jfile` values unchanged, `J(q)` is the Fourier transform of those literal
+values, and exported dressed `jfile` values use the same convention without a
+factor-of-two conversion.
+
+The factor ledger is:
+
+| quantity | factor | origin |
+|---|---:|---|
+| `J(q)` | `1` | literal `jfile` Fourier transform |
+| local exchange field | `2` | derivative of the ordered-pair Hamiltonian |
+| magnon energy | `2*g` | ordered-pair curvature times one gyromagnetic/Landé factor |
+| global pair energy | ordered-pair sum | native UppASD convention |
+| thermal white-noise factor | `2` | fluctuation-dissipation normalization; unrelated to pair counting |
+
+For a different source convention, convert at the boundary with
+`convert_exchange_to_uppasd`: a single-counted pair Hamiltonian
+`-sum_<ij> J' e_i·e_j` and a `-1/2` ordered double sum both use
+`J_UppASD = J'/2` (or `J''/2`). An AF-positive ordered convention requires a
+sign change. A spin-`S` Hamiltonian written with unit directions first absorbs
+the spin magnitudes into its pair coefficient and then applies the same
+single-counted conversion.
+
 ## Start here
 
 Run the application locally:

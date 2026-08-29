@@ -21,6 +21,11 @@ standard high-symmetry paths. Run tests with `PYTHONPATH=src pytest -q`.
 
 ## Prepare an UppASD input set
 
+The loader uses the literal UppASD ordered-pair convention
+`H = -sum_(i != j) Jij e_i·e_j`. Do not halve or double values from a
+pair-complete jfile. Conversion helpers for other Hamiltonian conventions are
+available as `convert_exchange_to_uppasd` at the Python API boundary.
+
 The loader starts from `inpsd.dat`, which must name the position, moment, and
 exchange files and provide the cell for reciprocal-space work:
 

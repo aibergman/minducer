@@ -9,8 +9,13 @@ formal induction kernel.
 The real-space and reciprocal-space implementations use the same row/column
 convention as :mod:`induced_exchange.reciprocal`: row ``i``, column ``j`` is
 the field on ``i`` due to ``j`` and the input ``ExchangeBond.displacement``
-is authoritative.  The Hamiltonian convention remains
-``H = -1/2 sum_ij J_ij e_i dot e_j``.
+is authoritative.  The native Hamiltonian convention is
+``H = -sum_(i != j) Jij e_i dot e_j``.
+
+The J-weighted response uses normalized induced polarization
+``p_nu = m_nu / |m_nu^0|`` and robust orientation amplitudes ``e_a``.  Thus
+``K=J_input`` has energy units and ``X`` has inverse-energy units.  The
+identification is a model approximation, not an exact susceptibility.
 """
 
 from __future__ import annotations
@@ -112,10 +117,11 @@ class XInference:
     source_contributions: tuple[float, ...]
     x: float | None
     warnings: tuple[str, ...] = ()
+    reference_polarization: float | None = None
 
     @property
     def denominator(self) -> float:
-        """Alias for the source field in ``m0 = X * source_field``."""
+        """Alias for the source field in ``p0 = X * source_field``."""
 
         return self.source_field
 
@@ -123,6 +129,7 @@ class XInference:
         return {
             "site_index": self.site_index,
             "moment_reference": self.moment_reference,
+            "reference_polarization": self.reference_polarization,
             "source_field": self.source_field,
             "source_contributions": list(self.source_contributions),
             "x": self.x,
@@ -143,12 +150,25 @@ class XInferenceResult:
         return {site: entry.x for site, entry in self.per_site.items()}
 
     @property
+    def reference_robust_orientations(self) -> np.ndarray:
+        """Dimensionless reference orientation amplitudes used to infer X."""
+
+        return self.reference_robust_moments
+
+    @property
+    def reference_robust_configuration(self) -> np.ndarray:
+        """Clearer alias for the dimensionless reference orientation vector."""
+
+        return self.reference_robust_moments
+
+    @property
     def source_fields(self) -> dict[int, float]:
         return {site: entry.source_field for site, entry in self.per_site.items()}
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "reference_robust_moments": self.reference_robust_moments.tolist(),
+            "reference_robust_orientations": self.reference_robust_orientations.tolist(),
             "per_site": {str(site): entry.as_dict() for site, entry in self.per_site.items()},
             "warnings": list(self.warnings),
         }
@@ -156,7 +176,13 @@ class XInferenceResult:
 
 @dataclass(frozen=True)
 class InducedResponseResult:
-    """Response values and numerical diagnostics for q-space or real space."""
+    """Normalized polarization response and numerical diagnostics.
+
+    ``induced_moments`` is retained as the historical public field name, but
+    its values are the dimensionless ``p_nu`` amplitudes in the selected
+    response model.  Use :attr:`physical_induced_moments` when reference
+    moment magnitudes are available.
+    """
 
     induced_moments: np.ndarray
     source_fields: np.ndarray
@@ -179,12 +205,37 @@ class InducedResponseResult:
         return self.induced_moments
 
     @property
+    def induced_polarizations(self) -> np.ndarray:
+        """Dimensionless ``p_nu = m_nu / |m_nu^0|`` response amplitudes."""
+
+        return self.induced_moments
+
+    @property
+    def physical_induced_moments(self) -> np.ndarray | None:
+        """Convert the normalized response to moment amplitudes when possible."""
+
+        if self.reference_induced_moments is None:
+            return None
+        scale = np.abs(np.asarray(self.reference_induced_moments, dtype=float))
+        if self.q_fractional is None:
+            # Real-space vector responses are (n_induced, 3), whereas scalar
+            # responses are (n_induced,).  Do not add a q axis to the former.
+            if self.induced_moments.ndim == 2:
+                scale = scale[:, None]
+        elif self.induced_moments.ndim == 3:
+            scale = scale[None, :, None]
+        elif self.induced_moments.ndim >= 2:
+            scale = scale[None, :]
+        return self.induced_moments * scale
+
+    @property
     def m_induced_over_reference(self) -> np.ndarray | None:
         if self.reference_induced_moments is None:
             return None
-        denominator = np.asarray(self.reference_induced_moments, dtype=float)
-        with np.errstate(divide="ignore", invalid="ignore"):
-            return self.induced_moments / denominator
+        # In the selected normalized-polarization parameterization this ratio
+        # is exactly the stored p_nu response.  Keep the historical property
+        # name for callers of earlier releases.
+        return self.induced_moments
 
     @property
     def m_ind_q_over_m_ind_0(self) -> np.ndarray | None:
@@ -212,6 +263,8 @@ class InducedResponseResult:
             "induced_sites": list(self.induced_sites),
             "mode": self.mode,
             "induced_moments": self.induced_moments.tolist(),
+            "induced_polarizations": self.induced_polarizations.tolist(),
+            "physical_induced_moments": None if self.physical_induced_moments is None else self.physical_induced_moments.tolist(),
             "source_fields": self.source_fields.tolist(),
             "condition_numbers": self.condition_numbers.tolist(),
             "singular": self.singular.tolist(),
@@ -275,8 +328,10 @@ class InducedMomentResponse:
         approximation`` with ``K = J_input`` by default.
     x:
         Optional scalar, site mapping, sublattice mapping, or ordered array of
-        susceptibility-like coefficients.  If omitted, coefficients are
-        inferred from the collinear reference moments when possible.
+        susceptibility-like coefficients.  For the J-weighted model ``X`` is
+        in inverse energy units and is inferred from ``p_nu^0 = 1`` (or its
+        signed reference projection) and the reference robust orientations
+        when possible.
     """
 
     def __init__(
@@ -399,7 +454,9 @@ class InducedMomentResponse:
                 result[induced_index, robust_position[target]] += 1.0
         return result
 
-    def _reference_robust_moments(self) -> tuple[np.ndarray, list[str]]:
+    def _reference_robust_orientations(self) -> tuple[np.ndarray, list[str]]:
+        """Return dimensionless robust amplitudes projected on a common axis."""
+
         if not self.robust_sites:
             raise ValueError("at least one robust site is required")
         site_by_index = self.model.site_by_index
@@ -412,15 +469,20 @@ class InducedMomentResponse:
         warnings: list[str] = []
         if directions and any(abs(float(np.dot(axis, direction))) < 1.0 - 1e-8 for direction in directions[1:]):
             warnings.append("reference spin directions are non-collinear; X inference uses projection on the first robust-site axis")
-        moments = []
+        orientations = []
         for site_index in self.robust_sites:
             site = site_by_index[site_index]
             if site.moment is None:
                 raise ValueError(f"robust site {site_index} has no reference moment")
             direction = site.spin_direction
             projection = 1.0 if direction is None else float(np.dot(np.asarray(direction, dtype=float) / max(np.linalg.norm(direction), 1e-300), axis))
-            moments.append(float(site.moment) * projection)
-        return np.asarray(moments, dtype=float), warnings
+            orientations.append(projection)
+        return np.asarray(orientations, dtype=float), warnings
+
+    # Retain the old private spelling as a compatibility shim.  The returned
+    # values are now explicitly dimensionless orientations, not mu_B moments.
+    def _reference_robust_moments(self) -> tuple[np.ndarray, list[str]]:
+        return self._reference_robust_orientations()
 
     def _reference_induced_moments(self) -> np.ndarray:
         axis = np.array([0.0, 0.0, 1.0])
@@ -440,6 +502,28 @@ class InducedMomentResponse:
             direction = site.spin_direction
             projection = 1.0 if direction is None else float(np.dot(np.asarray(direction, dtype=float) / max(np.linalg.norm(direction), 1e-300), axis))
             values.append(float(moment) * projection)
+        return np.asarray(values, dtype=float)
+
+    def _reference_induced_polarizations(self) -> np.ndarray:
+        """Return signed reference p values used by normalized X inference."""
+
+        axis = np.array([0.0, 0.0, 1.0])
+        for site_index in self.robust_sites:
+            direction = self.model.site_by_index[site_index].spin_direction
+            if direction is not None and np.linalg.norm(direction) > 1e-14:
+                axis = np.asarray(direction, dtype=float)
+                axis /= np.linalg.norm(axis)
+                break
+        values = []
+        for site_index in self.induced_sites:
+            site = self.model.site_by_index[site_index]
+            if site.moment is None:
+                values.append(np.nan)
+                continue
+            direction = site.spin_direction
+            projection = 1.0 if direction is None else float(np.dot(np.asarray(direction, dtype=float) / max(np.linalg.norm(direction), 1e-300), axis))
+            sign = -1.0 if float(site.moment) < 0.0 else 1.0
+            values.append(sign * projection)
         return np.asarray(values, dtype=float)
 
     def _real_space_blocks(self) -> tuple[np.ndarray, np.ndarray, list[np.ndarray]]:
@@ -525,24 +609,26 @@ class InducedMomentResponse:
         or silently regularized.
         """
 
-        robust_moments, warnings = self._reference_robust_moments()
+        robust_orientations, warnings = self._reference_robust_orientations()
         if self.mode == "historical":
             source_matrix = self._local_matrix
             contributions = [
-                (self._local_matrix[index] * robust_moments).tolist()
+                (self._local_matrix[index] * robust_orientations).tolist()
                 for index in range(len(self.induced_sites))
             ]
         else:
             _, source_matrix, _ = self._real_space_blocks()
             contributions = []
             for index in range(len(self.induced_sites)):
-                contributions.append([value * robust_moments[j] for j, value in enumerate(source_matrix[index]) if value != 0])
-        source = source_matrix @ robust_moments
+                contributions.append([value * robust_orientations[j] for j, value in enumerate(source_matrix[index]) if value != 0])
+        source = source_matrix @ robust_orientations
         entries: dict[int, XInference] = {}
         site_by_index = self.model.site_by_index
+        reference_polarizations = self._reference_induced_polarizations()
         for index, site_index in enumerate(self.induced_sites):
             induced_site = site_by_index[site_index]
             m0 = None if induced_site.moment is None else float(induced_site.moment)
+            p0 = None if not np.isfinite(reference_polarizations[index]) else float(reference_polarizations[index])
             local_warnings: list[str] = []
             terms = np.asarray(contributions[index], dtype=float)
             if len(terms) > 1 and abs(float(np.sum(terms))) <= cancellation_ratio * max(float(np.sum(np.abs(terms))), 1e-300):
@@ -550,19 +636,27 @@ class InducedMomentResponse:
             if abs(source[index]) <= denominator_tolerance * max(1.0, float(np.sum(np.abs(terms)))):
                 local_warnings.append("source field is zero or near zero; X cannot be inferred")
                 x_value = None
-            elif m0 is None:
-                local_warnings.append("reference induced moment is missing; X cannot be inferred")
+            elif p0 is None:
+                local_warnings.append("reference induced polarization is missing; X cannot be inferred")
                 x_value = None
             else:
-                x_value = float(m0 / source[index])
+                x_value = float(p0 / source[index])
                 if x_value < 0:
                     local_warnings.append("inferred X is negative; check signs, reference orientation, and kernel convention")
                 if not np.isfinite(x_value):
                     local_warnings.append("inferred X is non-finite")
                     x_value = None
             warnings.extend(f"site {site_index}: {message}" for message in local_warnings)
-            entries[site_index] = XInference(site_index, m0, float(source[index]), tuple(float(value) for value in terms), x_value, tuple(local_warnings))
-        return XInferenceResult(entries, robust_moments, tuple(warnings))
+            entries[site_index] = XInference(
+                site_index,
+                m0,
+                float(source[index]),
+                tuple(float(value) for value in terms),
+                x_value,
+                tuple(local_warnings),
+                reference_polarization=p0,
+            )
+        return XInferenceResult(entries, robust_orientations, tuple(warnings))
 
     def _apply(
         self,
@@ -617,10 +711,11 @@ class InducedMomentResponse:
         *,
         coordinates: str = "fractional",
     ) -> InducedResponseResult:
-        """Evaluate the instantaneous slave response for supplied q-space M(q).
+        """Evaluate the instantaneous slave response for supplied q-space e(q).
 
-        ``robust_configuration`` has shape ``(nq, nrobust)`` for scalar
-        amplitudes, or ``(nq, nrobust, 3)`` for vector amplitudes.  A single-q
+        ``robust_configuration`` contains dimensionless robust orientation
+        amplitudes and has shape ``(nq, nrobust)`` for scalar amplitudes, or
+        ``(nq, nrobust, 3)`` for vector amplitudes.  A single-q
         ``(nrobust,)``/``(nrobust, 3)`` input is accepted as a convenience.
         """
 
@@ -654,10 +749,11 @@ class InducedMomentResponse:
         return InducedResponseResult(response, fields, condition, singular, self.induced_sites, self.mode, tuple(warnings), q_fractional, q_cartesian, hermiticity, self._reference_induced_moments())
 
     def response_real_space(self, robust_configuration: Mapping[int, Any] | Sequence[Any] | np.ndarray) -> InducedResponseResult:
-        """Evaluate instantaneous slave moments for an arbitrary robust spin configuration.
+        """Evaluate normalized slave polarization for a robust configuration.
 
-        This computes an algebraic response at one instant.  It does not
-        propagate induced moments and does not create induced LLG/LSWT modes.
+        The input is a dimensionless robust orientation configuration.  This
+        computes an algebraic response at one instant.  It does not propagate
+        induced moments and does not create induced LLG/LSWT modes.
         """
 
         values, vector = _normalise_configuration(robust_configuration, self.robust_sites, name="robust_configuration")
@@ -681,7 +777,7 @@ def instantaneous_slave_moments(
     neighbourhood: str | Sequence[int] | Mapping[int, Sequence[int]] = "first_shell",
     cutoff: float | None = None,
 ) -> np.ndarray:
-    """Convenience wrapper returning only instantaneous slave moment values."""
+    """Return only the instantaneous dimensionless slave polarization ``p``."""
 
     response = InducedMomentResponse(
         model,

@@ -33,6 +33,8 @@ body { background: #eef3f6; }
 .imx-note { border-left: 4px solid var(--imx-coral); background: #fff7f3; padding: 12px 15px; border-radius: 8px; color: #5b3b35; }
 .imx-card { border: 1px solid #dfe8ed; background: rgba(255,255,255,.72); border-radius: 14px; padding: 6px; }
 .imx-muted { color: #597080; }
+.imx-plot-heading { color: var(--imx-teal); font-size: .95rem; font-weight: 700; margin: 4px 0 6px; padding: 0 6px; }
+.imx-plot-heading p { margin: 0; }
 footer { display: none !important; }
 """
 
@@ -108,6 +110,11 @@ def build_demo():
         "UppASD symmetry-reduced Jij": examples_root / "uppasd_style" / "inpsd.dat",
     }
 
+    def plot_heading(text):
+        """Render plot context outside the Matplotlib canvas."""
+
+        return gr.Markdown(f"<div class='imx-plot-heading'>{text}</div>")
+
     with gr.Blocks(title="Induced-Moment Exchange Explorer") as demo:
         session_state = gr.State(None)
         gr.HTML("<div class='imx-hero'><div class='imx-kicker'>Scientific exchange analysis · CPU-friendly</div><h1>Induced-Moment Exchange Explorer</h1><p>From UppASD-style Jij input to reciprocal exchange, induced response, downfolded interactions, and FM-compatible magnon diagnostics.</p></div>", padding=False)
@@ -147,8 +154,12 @@ def build_demo():
                 gr.Markdown("### Raw rigid-site exchange\nAll supplied sites and literal UppASD jfile Jij rows are retained. The ordering diagnostic is the largest eigenvalue of J(q) under the UppASD ordered-pair convention `H = −Σᵢ≠ⱼ Jij eᵢ·eⱼ`. The scan is restricted to the seekpath high-symmetry path (or the explicitly labelled fallback path if seekpath cannot classify the structure); it is not a global 3-D ordering search. The distance plot separates `J_MM` (robust–robust, circles), `J_Mm` (robust–induced, squares), and `J_mm` (induced–induced, triangles).")
                 raw_ordering = gr.Markdown("Load an input set and run analysis.")
                 with gr.Row():
-                    distance_plot = gr.Plot(label="Raw Jij by subspace · distance")
-                    raw_plot = gr.Plot(label="J(q) eigenvalue scan · high-symmetry path")
+                    with gr.Column():
+                        plot_heading("Raw Jij by subspace · distance")
+                        distance_plot = gr.Plot(label="Raw Jij by subspace · distance", show_label=False)
+                    with gr.Column():
+                        plot_heading("J(q) eigenvalue scan · high-symmetry path")
+                        raw_plot = gr.Plot(label="J(q) eigenvalue scan · high-symmetry path", show_label=False)
                 shell_table = gr.Dataframe(headers=["shell", "radius", "count", "mean Jij", "min Jij", "max Jij"], row_count=1, label="Radial exchange shells", interactive=False)
 
             with gr.Tab("3 · Induced response"):
@@ -160,24 +171,35 @@ def build_demo():
                 response_recompute = gr.Button("Recompute response and dressing", variant="primary")
                 response_info = gr.Markdown()
                 with gr.Row():
-                    response_plot = gr.Plot(label="p_ind(q) / p_ind(Γ) · coherent spiral")
+                    with gr.Column():
+                        plot_heading("p_ind(q) / p_ind(Γ) · coherent spiral")
+                        response_plot = gr.Plot(label="p_ind(q) / p_ind(Γ) · coherent spiral", show_label=False)
                     inference_table = gr.Dataframe(headers=["site", "m_ref (mu_B)", "source field (energy)", "X (1/energy)", "warnings"], row_count=1, label="X inference and source-field normalization", interactive=False)
 
             with gr.Tab("4 · Dressed exchange"):
                 gr.Markdown("### Robust-space exchange after induced-moment elimination\nThe induced contribution is a model-dependent correction using the selected response approximation. `J_eff(q)` is the Fourier-space matrix in the robust basis; the q-plot shows its leading eigenvalue. For one robust site (such as Fe with Pt treated as induced), this matrix is a scalar. The first real-space plot uses shell means to compare the direct `J_RR(r)`, cross-block `K_RI(r)`, Mryasov/downfolded `J_Mryasov(r)`, and Polesya-like induced `J_Polesya(r)` channels. With the same static response model, the last two are numerically equivalent and are shown with separate labels. The induced correction `ΔJ_induced(r)` and its relative value `ΔJ_induced(r) / J_RR(r)` are plotted separately below. Real-space x-axes use the implicit UppASD lattice parameter convention (`alat = 1`), while all curves are reconstructed from a separate complete q mesh; moment normalization remains separate in the magnon calculation. The exported `dressed_jfile` is directly compatible with UppASD's ordered-pair convention.")
                 dressed_info = gr.Markdown()
                 with gr.Row():
-                    dressed_plot = gr.Plot(label="Robust-space J_eff(q) · high-symmetry path")
-                    dressed_realspace_plot = gr.Plot(label="Real-space exchange channels · shell means")
+                    with gr.Column():
+                        plot_heading("Robust-space J_eff(q) · high-symmetry path")
+                        dressed_plot = gr.Plot(label="Robust-space J_eff(q) · high-symmetry path", show_label=False)
+                    with gr.Column():
+                        plot_heading("Real-space exchange channels · shell means")
+                        dressed_realspace_plot = gr.Plot(label="Real-space exchange channels · shell means", show_label=False)
                 with gr.Row():
-                    dressed_delta_realspace_plot = gr.Plot(label="Induced correction ΔJ_induced(r) · shell means")
-                    dressed_relative_realspace_plot = gr.Plot(label="Relative induced correction ΔJ_induced/J_MM · shell means")
+                    with gr.Column():
+                        plot_heading("Induced correction ΔJ_induced(r) · shell means")
+                        dressed_delta_realspace_plot = gr.Plot(label="Induced correction ΔJ_induced(r) · shell means", show_label=False)
+                    with gr.Column():
+                        plot_heading("Relative induced correction ΔJ_induced/J_MM · shell means")
+                        dressed_relative_realspace_plot = gr.Plot(label="Relative induced correction ΔJ_induced/J_MM · shell means", show_label=False)
                 dressed_table = gr.Dataframe(headers=["shell", "radius", "count", "mean J_MM(r)", "mean ΔJ_induced(r)", "mean J_eff(r)", "max |Im J_eff|", "mean J_eff(r)/m_R"], row_count=1, label="Auxiliary-mesh reconstructed robust-space exchange shells", interactive=False)
 
             with gr.Tab("5 · Magnons"):
                 gr.Markdown("### FM-compatible spectra\nIf Gamma is not locally stable, the plot is explicitly signed harmonic data, not a stable magnon spectrum.")
                 magnon_info = gr.Markdown()
-                magnon_plot = gr.Plot(label="Magnon bands")
+                plot_heading("Magnon bands")
+                magnon_plot = gr.Plot(label="Magnon bands", show_label=False)
 
             with gr.Tab("6 · Compare datasets"):
                 gr.Markdown("### Compare two compatible Jij datasets\nUseful for LKAG vs frozen-magnon comparisons. Basis cell/positions must match; exchange values are allowed to differ.")
@@ -189,8 +211,10 @@ def build_demo():
                     compare_button = gr.Button("Compare A vs B", variant="primary")
                 compare_status = gr.Markdown()
                 compare_table = gr.Dataframe(headers=["check / diagnostic", "value"], row_count=1, label="Compatibility and diagnostics", interactive=False)
-                compare_plot = gr.Plot(label="Raw exchange comparison")
-                compare_response_plot = gr.Plot(label="Optional induced-response comparison")
+                plot_heading("Raw exchange comparison")
+                compare_plot = gr.Plot(label="Raw exchange comparison", show_label=False)
+                plot_heading("Optional induced-response comparison")
+                compare_response_plot = gr.Plot(label="Optional induced-response comparison", show_label=False)
 
             with gr.Tab("7 · Methods / limitations"):
                 gr.Markdown("""

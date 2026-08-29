@@ -566,10 +566,16 @@ def high_symmetry_path(
             # lattice for the returned Cartesian q coordinates.
             cell_scale = float(np.max(np.linalg.norm(model_or_cell.cell, axis=1), initial=0.0))
             seekpath_cell = model_or_cell.cell / cell_scale if cell_scale > 0.0 else model_or_cell.cell
+            atom_type_numbers: dict[Any, int] = {}
+            numbers: list[int] = []
+            for site in model_or_cell.sites:
+                if site.atom_type not in atom_type_numbers:
+                    atom_type_numbers[site.atom_type] = len(atom_type_numbers) + 1
+                numbers.append(atom_type_numbers[site.atom_type])
             structure = (
                 seekpath_cell,
                 scaled_positions,
-                [site.atom_type for site in model_or_cell.sites],
+                numbers,
             )
             path_data = seekpath.get_path(structure)
             point_coordinates = path_data["point_coords"]

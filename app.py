@@ -47,8 +47,44 @@ MPL_CACHE.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("MPLCONFIGDIR", str(MPL_CACHE))
 
 APP_CSS = """
-:root { --imx-ink: #183b56; --imx-teal: #18a999; --imx-coral: #e07a5f; --imx-paper: #f7fafc; }
-body { background: #eef3f6; }
+:root { --imx-ink: #183b56; --imx-teal: #18a999; --imx-coral: #e07a5f; --imx-paper: #f7fafc; --imx-page: #102a43; --imx-panel: #183b56; --imx-text-muted: #c7d6df; color-scheme: dark; }
+html, body, .gradio-container { background: var(--imx-page) !important; color: var(--imx-paper) !important; }
+.gradio-container {
+  --body-background-fill: var(--imx-page) !important;
+  --background-fill-primary: var(--imx-panel) !important;
+  --background-fill-secondary: var(--imx-page) !important;
+  --body-text-color: var(--imx-paper) !important;
+  --body-text-color-subdued: var(--imx-text-muted) !important;
+  --block-background-fill: var(--imx-panel) !important;
+  --block-info-text-color: var(--imx-text-muted) !important;
+  --block-label-background-fill: var(--imx-teal) !important;
+  --block-label-text-color: var(--imx-page) !important;
+  --block-title-text-color: var(--imx-page) !important;
+  --checkbox-label-text-color: var(--imx-paper) !important;
+  --table-text-color: var(--imx-paper) !important;
+  --table-even-background-fill: #214b63 !important;
+  --table-odd-background-fill: var(--imx-panel) !important;
+  --button-secondary-background-fill: #214b63 !important;
+  --button-secondary-text-color: var(--imx-paper) !important;
+  --input-background-fill: var(--imx-paper) !important;
+  --input-background-fill-hover: #ffffff !important;
+  --input-background-fill-focus: #ffffff !important;
+  --input-placeholder-color: #597080 !important;
+}
+.gradio-container .prose,
+.gradio-container .prose p,
+.gradio-container .prose li,
+.gradio-container .prose h1,
+.gradio-container .prose h2,
+.gradio-container .prose h3,
+.gradio-container .prose h4,
+.gradio-container .prose blockquote,
+.gradio-container .label-wrap label,
+.gradio-container .block-info,
+.gradio-container .info,
+.gradio-container .description,
+.gradio-container .tab-nav button { color: var(--imx-paper) !important; }
+.gradio-container .imx-plot-heading { color: var(--imx-teal) !important; }
 .imx-shell { max-width: 1380px; margin: 0 auto; }
 .imx-hero { background: linear-gradient(125deg, #183b56 0%, #236477 58%, #18a999 100%); color: white; border-radius: 20px; padding: 30px 34px; margin-bottom: 18px; box-shadow: 0 14px 32px rgba(24,59,86,.16); }
 .imx-hero h1 { margin: 0 0 8px; font-size: 2.2rem; letter-spacing: -.03em; }

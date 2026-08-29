@@ -106,6 +106,23 @@ def test_explicit_path_and_heatmap_data_are_numeric():
     assert heatmap["max_eigenvalue"].shape == (3, 4)
 
 
+def test_seekpath_maps_named_atom_types_to_species_numbers():
+    model = MagneticCrystal(
+        cell=np.eye(3),
+        sites=[
+            MagneticSite(index=1, atom_type="Fe", position=(0.0, 0.0, 0.0), moment=1.0),
+            MagneticSite(index=2, atom_type="Pt", position=(0.5, 0.0, 0.0), moment=1.0),
+        ],
+        exchange_bonds=[],
+    )
+
+    path = high_symmetry_path(model, n_per_segment=2)
+
+    assert path.source == "seekpath"
+    assert path.tick_labels[0] == "GAMMA"
+    assert "X" in path.tick_labels
+
+
 def test_empty_q_set_has_a_structured_empty_result():
     model = crystal(np.eye(3), [])
     result = exchange_fourier(model, np.empty((0, 3)), coordinates="fractional")

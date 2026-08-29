@@ -11,6 +11,30 @@ from pathlib import Path
 
 import numpy as np
 
+# ZeroGPU Spaces provides this package at runtime. Keep local CPU-only
+# development import-safe when the package is not installed.
+try:
+    import spaces
+except ImportError:  # pragma: no cover - depends on the hosting runtime
+    class _LocalSpaces:
+        @staticmethod
+        def GPU(*args, **kwargs):
+            def decorate(function):
+                return function
+
+            return decorate
+
+    spaces = _LocalSpaces()
+
+
+# Hugging Face ZeroGPU requires at least one GPU-decorated function at startup.
+# The explorer itself is CPU-only; this probe is deliberately not connected to
+# any UI event and is never called during normal use.
+@spaces.GPU(duration=1)
+def _zerogpu_probe():
+    return True
+
+
 # The Space runs ``python app.py`` directly from a source-layout repository.
 SRC = Path(__file__).resolve().parent / "src"
 if str(SRC) not in sys.path:

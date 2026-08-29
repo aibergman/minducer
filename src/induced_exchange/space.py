@@ -759,13 +759,26 @@ def _figure_realspace(session: AnalysisSession) -> Any:
     model = session.loaded.model
     distances = model.bond_distances
     values = np.asarray([bond.jij for bond in model.exchange_bonds], dtype=float)
-    if len(distances):
-        ax.scatter(distances, values, s=22, color="#18a999", alpha=0.78)
-    else:
+    robust = set(session.robust_sites)
+    induced = set(session.induced_sites)
+    categories = (
+        (r"$J_{MM}$", lambda bond: bond.i in robust and bond.j in robust, "o", "#18a999"),
+        (r"$J_{Mm}$", lambda bond: (bond.i in robust and bond.j in induced) or (bond.i in induced and bond.j in robust), "s", "#183b56"),
+        (r"$J_{mm}$", lambda bond: bond.i in induced and bond.j in induced, "^", "#e07a5f"),
+    )
+    plotted = False
+    for label, selector, marker, color in categories:
+        selected = np.asarray([selector(bond) for bond in model.exchange_bonds], dtype=bool)
+        if np.any(selected):
+            ax.scatter(distances[selected], values[selected], s=34, color=color, marker=marker, alpha=0.8, label=label)
+            plotted = True
+    if not plotted:
         ax.text(0.5, 0.5, "No exchange rows", ha="center", va="center")
     ax.axhline(0.0, color="#8b98a6", linewidth=0.8, label="_nolegend_")
-    ax.set(xlabel="authoritative bond distance", ylabel=f"Jij ({model.units.energy})", title="Raw exchange versus distance")
+    ax.set(xlabel="authoritative bond distance", ylabel=f"Jij ({model.units.energy})", title="Raw exchange by subspace versus distance")
     ax.grid(alpha=0.18)
+    if plotted:
+        ax.legend(frameon=False)
     fig.tight_layout()
     plt.close(fig)
     return fig
@@ -848,7 +861,7 @@ def _figure_dressed_realspace(session: AnalysisSession) -> Any:
         if cross is not None and cross.ndim == 3 and cross.shape[1:] == (1, 1):
             _plot_shell_series(ax, distances, selections, cross[:, 0, 0], "J_Mm(r) = K_Mm(r)", "#183b56")
         _plot_shell_series(ax, distances, selections, dressed[:, 0, 0], "J_Mryasov(r)", "#e07a5f")
-        # The Polesya/slave and Mryasov/downfolded curves use the same static
+        # The Polesya-like induced and Mryasov/downfolded curves use the same static
         # response operator in this package, so retain both labels while
         # making their numerical equivalence explicit.
         _plot_shell_series(ax, distances, selections, dressed[:, 0, 0], "J_Polesya(r) = J_Mryasov(r)", "#e07a5f", linestyle=":", marker=None)
@@ -1013,7 +1026,7 @@ def _figure_magnons(session: AnalysisSession) -> Any:
 
     fig, ax = plt.subplots(figsize=(8.4, 4.1))
     colors = {"raw": "#183b56", "robust-only": "#18a999", "dressed": "#e07a5f", "polesya": "#8c5e8a"}
-    labels = {"raw": "Raw all-rigid", "robust-only": "Robust-only raw", "dressed": "Mryasov-like downfolded", "polesya": "Polesya-like slave"}
+    labels = {"raw": "Raw all-rigid", "robust-only": "Robust-only raw", "dressed": "Mryasov-like downfolded", "polesya": "Polesya-like induced variables eliminated"}
     x, tick_positions, tick_labels, source = _path_axis(session, len(next(iter(session.magnons.values())).energies) if session.magnons else 0)
     linestyles = {"raw": "-", "robust-only": "--", "dressed": "-", "polesya": ":"}
     for name, spectrum in session.magnons.items():
@@ -1067,7 +1080,7 @@ def magnon_markdown(session: AnalysisSession) -> str:
         return "No FM spectrum could be constructed for the current input."
     path_source = "unknown" if session.path is None else session.path.path.source
     lines = [f"The spectrum is evaluated only along the high-symmetry q path (`{path_source}`); the horizontal axis is Cartesian reciprocal-space path distance."]
-    labels = {"raw": "Raw all-rigid", "robust-only": "Robust-only raw", "dressed": "Mryasov-like downfolded", "polesya": "Polesya-like slave"}
+    labels = {"raw": "Raw all-rigid", "robust-only": "Robust-only raw", "dressed": "Mryasov-like downfolded", "polesya": "Polesya-like induced variables eliminated"}
     for name, spectrum in session.magnons.items():
         status = "stable/FM-compatible" if spectrum.stable and spectrum.fm_compatible else "UNSTABLE — signed harmonic data only"
         lines.append(f"**{labels.get(name, name)}:** `{status}` · branches = `{spectrum.energies.shape[1]}` · negative modes = `{len(spectrum.unstable_indices)}`")

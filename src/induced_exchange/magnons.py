@@ -28,7 +28,7 @@ both the supplied moments and the magnetic moment in the equation are
 expressed in mu_B.  The eigenvalues of ``D`` are hbar*omega in the
 exchange-energy unit.
 
-Induced sites never enter this dynamical basis.  A Polesya/slave calculation
+Induced sites never enter this dynamical basis.  A Polesya-like induced-variable calculation
 uses the dressed robust matrix after analytical elimination, so its physical
 low-energy spectrum is directly comparable to the Mryasov/downfolded one.
 """
@@ -57,8 +57,8 @@ _MODEL_NAMES = {
     "robust_raw": "robust-only raw",
     "mryasov": "Mryasov-like downfolded robust",
     "downfolded": "Mryasov-like downfolded robust",
-    "polesya": "Polesya-like slave, induced variables eliminated",
-    "slave": "Polesya-like slave, induced variables eliminated",
+    "polesya": "Polesya-like induced variables eliminated",
+    "slave": "Polesya-like induced variables eliminated",
 }
 
 
@@ -554,7 +554,7 @@ def fm_magnon_spectrum(
     ``model='robust_only'`` retains only explicitly supplied robust sites.
     ``model='mryasov'`` and ``model='polesya'`` both use the robust dressed
     interaction after induced variables have been eliminated; the latter name
-    records the slave-response representation, not extra slave branches.
+    records the induced-response representation, not extra induced branches.
     """
 
     selected_model = _normalise_model_name(model)
@@ -686,7 +686,7 @@ def mryasov_fm_magnon_spectrum(source: InducedExchangeDownfolding | InducedMomen
 
 
 def polesya_fm_magnon_spectrum(source: InducedExchangeDownfolding | InducedMomentResponse | DownfoldingResult, q_points: Sequence[Sequence[float]] | np.ndarray | None = None, **kwargs: Any) -> FMSpinWaveResult:
-    """Convenience wrapper for the physical Polesya-like slave spectrum."""
+    """Convenience wrapper for the physical Polesya-like induced spectrum."""
 
     return fm_magnon_spectrum(source, q_points, model="polesya", **kwargs)
 

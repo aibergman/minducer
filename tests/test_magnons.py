@@ -145,7 +145,7 @@ def test_stiffness_fit_uses_visible_user_interval_and_has_expected_long_wave_lim
     assert stiffness.q_max == 0.25
 
 
-def test_polesya_and_mryasov_physical_spectra_are_identical_without_slave_branches():
+def test_polesya_and_mryasov_physical_spectra_are_identical_without_induced_branches():
     model = crystal(
         [site(1, 1.0), site(2, 1.0)],
         [

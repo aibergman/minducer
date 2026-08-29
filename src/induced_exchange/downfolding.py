@@ -288,7 +288,7 @@ class InducedExchangeDownfolding:
     The constructor accepts an :class:`InducedMomentResponse`, or a model plus
     explicit ``robust_sites`` and ``induced_sites``.  In either form the same
     classification, kernel, X values, and approximation label are used by the
-    explicit slave response and by the downfolded energy.
+    explicit induced response and by the downfolded energy.
     """
 
     def __init__(

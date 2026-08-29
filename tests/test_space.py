@@ -138,6 +138,19 @@ def test_space_plot_labels_explain_path_and_response_normalization():
     assert "coherent unit-amplitude" in response_markdown(session)
 
 
+def test_raw_exchange_plot_separates_robust_cross_and_induced_markers():
+    pytest.importorskip("matplotlib.pyplot")
+    loaded = load_uppasd("examples/induced_toy/inpsd.dat", energy_unit="meV")
+    session = analyse_model(loaded, SublatticeClassification.from_inputs([1], [2]), mesh_size=2, x=0.5)
+
+    figure = _figure_realspace(session)
+    labels = {r"$J_{MM}$", r"$J_{Mm}$", r"$J_{mm}$"}
+    labelled = [collection for collection in figure.axes[0].collections if collection.get_label() in labels]
+    assert {collection.get_label() for collection in labelled} == labels
+    marker_shapes = {tuple(np.round(collection.get_paths()[0].vertices.ravel(), 8)) for collection in labelled}
+    assert len(marker_shapes) == 3
+
+
 def test_dressed_realspace_plots_separate_induced_correction_and_label_channels():
     pytest.importorskip("matplotlib.pyplot")
     loaded = load_uppasd("examples/induced_toy/inpsd.dat", energy_unit="meV")

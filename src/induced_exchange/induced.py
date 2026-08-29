@@ -1,4 +1,4 @@
-"""Explicit Polesya-like induced/slave moment response models.
+"""Explicit Polesya-like induced-moment response models.
 
 This module implements the response layer only.  It does not downfold the
 energy or create dynamical degrees of freedom for induced sites.  The
@@ -312,7 +312,7 @@ def _normalise_configuration(values: Mapping[int, Any] | Sequence[Any] | np.ndar
 
 
 class InducedMomentResponse:
-    """Evaluate historical or J-weighted instantaneous slave moments.
+    """Evaluate historical or J-weighted instantaneous induced moments.
 
     Parameters
     ----------
@@ -388,7 +388,7 @@ class InducedMomentResponse:
 
     @property
     def response_label(self) -> str:
-        return "J-weighted induced-response approximation" if self.mode == "j_weighted" else "historical local/unweighted slave response"
+        return "J-weighted induced-response approximation" if self.mode == "j_weighted" else "historical local/unweighted induced response"
 
     @property
     def local_neighbour_matrix(self) -> np.ndarray:
@@ -711,7 +711,7 @@ class InducedMomentResponse:
         *,
         coordinates: str = "fractional",
     ) -> InducedResponseResult:
-        """Evaluate the instantaneous slave response for supplied q-space e(q).
+        """Evaluate the instantaneous induced response for supplied q-space e(q).
 
         ``robust_configuration`` contains dimensionless robust orientation
         amplitudes and has shape ``(nq, nrobust)`` for scalar amplitudes, or
@@ -749,7 +749,7 @@ class InducedMomentResponse:
         return InducedResponseResult(response, fields, condition, singular, self.induced_sites, self.mode, tuple(warnings), q_fractional, q_cartesian, hermiticity, self._reference_induced_moments())
 
     def response_real_space(self, robust_configuration: Mapping[int, Any] | Sequence[Any] | np.ndarray) -> InducedResponseResult:
-        """Evaluate normalized slave polarization for a robust configuration.
+        """Evaluate normalized induced polarization for a robust configuration.
 
         The input is a dimensionless robust orientation configuration.  This
         computes an algebraic response at one instant.  It does not propagate
@@ -765,7 +765,7 @@ class InducedMomentResponse:
         return InducedResponseResult(result, source, condition, singular, self.induced_sites, self.mode, tuple(warnings), reference_induced_moments=self._reference_induced_moments())
 
 
-def instantaneous_slave_moments(
+def instantaneous_induced_moments(
     model: MagneticCrystal,
     robust_configuration: Mapping[int, Any] | Sequence[Any] | np.ndarray,
     robust_sites: Sequence[int] | Mapping[Hashable, Sequence[int]],
@@ -777,7 +777,7 @@ def instantaneous_slave_moments(
     neighbourhood: str | Sequence[int] | Mapping[int, Sequence[int]] = "first_shell",
     cutoff: float | None = None,
 ) -> np.ndarray:
-    """Return only the instantaneous dimensionless slave polarization ``p``."""
+    """Return only the instantaneous dimensionless induced polarization ``p``."""
 
     response = InducedMomentResponse(
         model,
@@ -795,6 +795,9 @@ def instantaneous_slave_moments(
 # A concise spelling is useful in notebooks and retains the physical name.
 InducedResponse = InducedMomentResponse
 
+# Backward-compatible alias for callers of the original API spelling.
+instantaneous_slave_moments = instantaneous_induced_moments
+
 
 __all__ = [
     "InducedMomentResponse",
@@ -804,5 +807,6 @@ __all__ = [
     "SublatticeClassification",
     "XInference",
     "XInferenceResult",
+    "instantaneous_induced_moments",
     "instantaneous_slave_moments",
 ]

@@ -42,6 +42,7 @@ from .induced import (
     SublatticeClassification,
     XInference,
     XInferenceResult,
+    instantaneous_induced_moments,
     instantaneous_slave_moments,
 )
 from .downfolding import (
@@ -161,6 +162,7 @@ __all__ = [
     "SublatticeClassification",
     "XInference",
     "XInferenceResult",
+    "instantaneous_induced_moments",
     "instantaneous_slave_moments",
     "DressedExchangeRealSpace",
     "DownfoldingResult",

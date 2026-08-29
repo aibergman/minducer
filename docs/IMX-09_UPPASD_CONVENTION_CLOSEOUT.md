@@ -217,12 +217,12 @@ and arbitrary complex q amplitudes. This is the decisive normalization test.
 
 ## 9. Polesya/Mryasov equivalence
 
-The Polesya/slave response and Mryasov/downfolded result use the same `Xi` and
+The Polesya-like induced response and Mryasov/downfolded result use the same `Xi` and
 the same stationary `p*`. Induced sites are not added as independent LLG or
 LSWT degrees of freedom. Consequently the robust stationary energy and the
 adiabatic physical magnon spectrum are identical. The application retains the
 two labels to distinguish the representations, not to introduce separate
-slave branches.
+induced branches.
 
 ## 10. Export and provenance
 

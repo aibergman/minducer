@@ -4,7 +4,7 @@
 
 The program can exactly manipulate the supplied effective spin model: it can
 Fourier transform the supplied Cartesian `Jij`, solve the selected linear
-slave-response model, and perform the corresponding Schur-complement
+induced-response model, and perform the corresponding Schur-complement
 downfolding. It cannot determine the true electronic susceptibility from
 `Jij` alone.
 

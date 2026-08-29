@@ -61,7 +61,7 @@ search. Use `regular_q_mesh` with the library API for a full mesh calculation.
 
 ## Induced moments
 
-Sites are explicitly classified as **robust** or **induced/slave**. The UI
+Sites are explicitly classified as **robust** or **induced**. The UI
 initially selects moments below 0.5 `mu_B` as induced, but this is only an
 editable convenience; the chosen classification, not the threshold, defines
 the calculation.
@@ -155,7 +155,7 @@ energy unit. For one sublattice, `J(q)=sum_j J_0j exp(i q.r_0j)` and
 rows therefore has `4*g*J/m [1-cos(qa)]`.
 Raw calculations retain all sites; robust-only calculations drop induced sites;
 dressed calculations first eliminate them. Induced sites never appear as extra
-independent magnon branches in a slave-moment calculation.
+independent magnon branches in an induced-moment calculation.
 
 Goldstone behaviour at Gamma, negative modes, and a non-Gamma ordering
 tendency are reported. A non-FM-compatible result is not presented as a

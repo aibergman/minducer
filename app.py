@@ -138,21 +138,21 @@ def build_demo():
                 load_status = gr.Markdown()
                 parsed_summary = gr.Markdown()
                 classification = gr.Dataframe(headers=["site", "atom_type", "moment (mu_B)", "role"], datatype=["number", "str", "number", "str"], type="array", row_count=1, label="Role preview (default: m < 0.5 μB is induced)", interactive=False)
-                induced_site_toggle = gr.CheckboxGroup(choices=[], value=[], label="Induced/slave sites (toggle)", info="Select induced sites explicitly. By default, sites with reference moment m < 0.5 μB are selected; all other sites are robust.")
+                induced_site_toggle = gr.CheckboxGroup(choices=[], value=[], label="Induced sites (toggle)", info="Select induced sites explicitly. By default, sites with reference moment m < 0.5 μB are selected; all other sites are robust.")
                 with gr.Row():
                     mesh_size = gr.Slider(4, 16, value=8, step=1, label="Seekpath points per segment", info="The exchange, response, dressed-exchange, and magnon plots use this high-symmetry path. The same value controls the auxiliary 3-D mesh used only for J_eff(r).")
                     analyze_button = gr.Button("Run analysis", variant="primary")
 
             with gr.Tab("2 · Raw exchange"):
-                gr.Markdown("### Raw rigid-site exchange\nAll supplied sites and literal UppASD jfile Jij rows are retained. The ordering diagnostic is the largest eigenvalue of J(q) under the UppASD ordered-pair convention `H = −Σᵢ≠ⱼ Jij eᵢ·eⱼ`. The scan is restricted to the seekpath high-symmetry path (or the explicitly labelled fallback path if seekpath cannot classify the structure); it is not a global 3-D ordering search.")
+                gr.Markdown("### Raw rigid-site exchange\nAll supplied sites and literal UppASD jfile Jij rows are retained. The ordering diagnostic is the largest eigenvalue of J(q) under the UppASD ordered-pair convention `H = −Σᵢ≠ⱼ Jij eᵢ·eⱼ`. The scan is restricted to the seekpath high-symmetry path (or the explicitly labelled fallback path if seekpath cannot classify the structure); it is not a global 3-D ordering search. The distance plot separates `J_MM` (robust–robust, circles), `J_Mm` (robust–induced, squares), and `J_mm` (induced–induced, triangles).")
                 raw_ordering = gr.Markdown("Load an input set and run analysis.")
                 with gr.Row():
-                    distance_plot = gr.Plot(label="Jij versus distance")
+                    distance_plot = gr.Plot(label="Raw Jij by subspace · distance")
                     raw_plot = gr.Plot(label="J(q) eigenvalue scan · high-symmetry path")
                 shell_table = gr.Dataframe(headers=["shell", "radius", "count", "mean Jij", "min Jij", "max Jij"], row_count=1, label="Radial exchange shells", interactive=False)
 
             with gr.Tab("3 · Induced response"):
-                gr.Markdown("### Induced/slave response\nClassify sites explicitly in the Input tab. The induced response is algebraic and instantaneous; induced sites are not independent LLG/LSWT degrees of freedom. The response panel uses a coherent unit-amplitude robust spin spiral along the same seekpath high-symmetry path.")
+                gr.Markdown("### Induced response\nClassify sites explicitly in the Input tab. The induced response is algebraic and instantaneous; induced sites are not independent LLG/LSWT degrees of freedom. The response panel uses a coherent unit-amplitude robust spin spiral along the same seekpath high-symmetry path.")
                 with gr.Row():
                     response_mode = gr.Radio([("J-weighted approximation", "j_weighted"), ("Historical unweighted", "historical")], value="j_weighted", label="Response model")
                     x_override = gr.Textbox(label="X override", placeholder="blank = infer · e.g. 0.12 or 2:0.12, 3:0.08", info="J-weighted mode: X has inverse-energy units and p_ind = X K e, where p_ind = m_ind/|m_ind⁰|.")
@@ -164,7 +164,7 @@ def build_demo():
                     inference_table = gr.Dataframe(headers=["site", "m_ref (mu_B)", "source field (energy)", "X (1/energy)", "warnings"], row_count=1, label="X inference and source-field normalization", interactive=False)
 
             with gr.Tab("4 · Dressed exchange"):
-                gr.Markdown("### Robust-space exchange after induced-moment elimination\nThe induced contribution is a model-dependent correction using the selected response approximation. `J_eff(q)` is the Fourier-space matrix in the robust basis; the q-plot shows its leading eigenvalue. For one robust site (such as Fe with Pt treated as induced), this matrix is a scalar. The first real-space plot uses shell means to compare the direct `J_RR(r)`, cross-block `K_RI(r)`, Mryasov/downfolded `J_Mryasov(r)`, and Polesya/slave `J_Polesya(r)` channels. With the same static response model, the last two are numerically equivalent and are shown with separate labels. The induced correction `ΔJ_induced(r)` and its relative value `ΔJ_induced(r) / J_RR(r)` are plotted separately below. Real-space x-axes use the implicit UppASD lattice parameter convention (`alat = 1`), while all curves are reconstructed from a separate complete q mesh; moment normalization remains separate in the magnon calculation. The exported `dressed_jfile` is directly compatible with UppASD's ordered-pair convention.")
+                gr.Markdown("### Robust-space exchange after induced-moment elimination\nThe induced contribution is a model-dependent correction using the selected response approximation. `J_eff(q)` is the Fourier-space matrix in the robust basis; the q-plot shows its leading eigenvalue. For one robust site (such as Fe with Pt treated as induced), this matrix is a scalar. The first real-space plot uses shell means to compare the direct `J_RR(r)`, cross-block `K_RI(r)`, Mryasov/downfolded `J_Mryasov(r)`, and Polesya-like induced `J_Polesya(r)` channels. With the same static response model, the last two are numerically equivalent and are shown with separate labels. The induced correction `ΔJ_induced(r)` and its relative value `ΔJ_induced(r) / J_RR(r)` are plotted separately below. Real-space x-axes use the implicit UppASD lattice parameter convention (`alat = 1`), while all curves are reconstructed from a separate complete q mesh; moment normalization remains separate in the magnon calculation. The exported `dressed_jfile` is directly compatible with UppASD's ordered-pair convention.")
                 dressed_info = gr.Markdown()
                 with gr.Row():
                     dressed_plot = gr.Plot(label="Robust-space J_eff(q) · high-symmetry path")
@@ -198,7 +198,7 @@ def build_demo():
 
                 **Raw rigid-site model.** Every supplied magnetic site is treated as an ordinary rigid moment. This is diagnostic when some sites are physically induced.
 
-                **Polesya-like slave moments.** Induced moments are eliminated as algebraic variables. The historical mode uses an unweighted local neighbour sum; the selected J-weighted mode evaluates the labelled **J-weighted induced-response approximation**.
+                **Polesya-like induced moments.** Induced moments are eliminated as algebraic variables. The historical mode uses an unweighted local neighbour sum; the selected J-weighted mode evaluates the labelled **J-weighted induced-response approximation**.
 
                 **Mryasov-like downfolding.** The induced subspace is eliminated variationally from one quadratic energy functional, yielding a robust-space `J_eff(q)`. No induced magnon branches are added.
 

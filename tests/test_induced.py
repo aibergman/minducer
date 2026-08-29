@@ -8,7 +8,7 @@ from induced_exchange import (
     MagneticCrystal,
     MagneticSite,
     SublatticeClassification,
-    instantaneous_slave_moments,
+    instantaneous_induced_moments,
     reciprocal_lattice,
 )
 from induced_exchange.downfolding import InducedExchangeDownfolding, inverse_fourier_dressed_jij
@@ -23,7 +23,7 @@ def crystal(sites, bonds) -> MagneticCrystal:
     return MagneticCrystal(np.eye(3), list(sites), list(bonds))
 
 
-def test_one_robust_one_induced_infers_x_and_evaluates_slave_moment():
+def test_one_robust_one_induced_infers_x_and_evaluates_induced_moment():
     model = crystal([site(1, 3.0), site(2, 1.5)], [ExchangeBond(2, 1, (0, 0, 0), 2.0)])
     response = InducedMomentResponse(model, [1], [2], mode="j_weighted")
 
@@ -152,7 +152,7 @@ def test_induced_toy_nonzero_q_has_no_false_block_adjoint_warning():
 
 def test_convenience_wrapper_is_algebraic_and_does_not_propagate():
     model = crystal([site(1, 1.0), site(2, 2.0)], [ExchangeBond(2, 1, (0, 0, 0), 3.0)])
-    values = instantaneous_slave_moments(model, [2.0], [1], [2], x={2: 0.5})
+    values = instantaneous_induced_moments(model, [2.0], [1], [2], x={2: 0.5})
     assert np.allclose(values, [3.0])
 
 

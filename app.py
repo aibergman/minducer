@@ -85,6 +85,9 @@ html, body, .gradio-container { background: var(--imx-page) !important; color: v
 .gradio-container .description,
 .gradio-container .tab-nav button { color: var(--imx-paper) !important; }
 .gradio-container .imx-plot-heading { color: var(--imx-teal) !important; }
+.gradio-container .imx-file-upload .wrap { color: var(--imx-paper) !important; }
+.gradio-container .imx-file-upload .wrap .or { color: var(--imx-text-muted) !important; }
+.gradio-container .imx-file-upload .wrap .icon-wrap { color: var(--imx-text-muted) !important; }
 .imx-shell { max-width: 1380px; margin: 0 auto; }
 .imx-hero { background: linear-gradient(125deg, #183b56 0%, #236477 58%, #18a999 100%); color: white; border-radius: 20px; padding: 30px 34px; margin-bottom: 18px; box-shadow: 0 14px 32px rgba(24,59,86,.16); }
 .imx-hero h1 { margin: 0 0 8px; font-size: 2.2rem; letter-spacing: -.03em; }
@@ -192,8 +195,8 @@ def build_demo():
                         info="Complete accepts a full UppASD neighbour setup. Reduced generates symmetry-related neighbours; conflicting Jij values are reported, never averaged.",
                     )
                 with gr.Row():
-                    inpsd_file = gr.File(label="inpsd.dat", file_count="single", type="filepath")
-                    supporting_files = gr.File(label="posfile / momfile / jfile (max 32 files / 100 MiB)", file_count="multiple", type="filepath")
+                    inpsd_file = gr.File(label="inpsd.dat", file_count="single", type="filepath", elem_classes=["imx-file-upload"])
+                    supporting_files = gr.File(label="posfile / momfile / jfile (max 32 files / 100 MiB)", file_count="multiple", type="filepath", elem_classes=["imx-file-upload"])
                 with gr.Row():
                     refresh_mapping = gr.Button("Inspect file mapping", variant="secondary")
                     load_button = gr.Button("Load input set", variant="primary")
@@ -264,9 +267,9 @@ def build_demo():
             with gr.Tab("6 · Compare datasets"):
                 gr.Markdown("### Compare two compatible Jij datasets\nUseful for LKAG vs frozen-magnon comparisons. Basis cell/positions must match; exchange values are allowed to differ.")
                 with gr.Row():
-                    b_inpsd = gr.File(label="Dataset B · inpsd.dat", file_count="single", type="filepath")
-                    b_files = gr.File(label="Dataset B · referenced files", file_count="multiple", type="filepath")
-                    external_response_file = gr.File(label="Optional external induced response (qx qy qz m_ind or path_coordinate m_ind)", file_count="single", type="filepath")
+                    b_inpsd = gr.File(label="Dataset B · inpsd.dat", file_count="single", type="filepath", elem_classes=["imx-file-upload"])
+                    b_files = gr.File(label="Dataset B · referenced files", file_count="multiple", type="filepath", elem_classes=["imx-file-upload"])
+                    external_response_file = gr.File(label="Optional external induced response (qx qy qz m_ind or path_coordinate m_ind)", file_count="single", type="filepath", elem_classes=["imx-file-upload"])
                     compare_observable = gr.Dropdown(["raw", "dressed", "magnons"], value="raw", label="Compare observable")
                     compare_button = gr.Button("Compare A vs B", variant="primary")
                 compare_status = gr.Markdown()

@@ -69,7 +69,38 @@ html, body, .gradio-container { background: var(--imx-page) !important; color: v
   --input-background-fill: var(--imx-paper) !important;
   --input-background-fill-hover: #ffffff !important;
   --input-background-fill-focus: #ffffff !important;
+  --input-text-color: #000000 !important;
   --input-placeholder-color: #597080 !important;
+}
+.gradio-container .gradio-dropdown input,
+.gradio-container .gradio-dropdown .wrap,
+.gradio-container .gradio-dropdown .options,
+.gradio-container .gradio-dropdown .options *,
+.gradio-container .gradio-dropdown [role="listbox"],
+.gradio-container .gradio-dropdown [role="listbox"] * {
+  color: #000000 !important;
+}
+/* DropdownOptions is rendered as a global fixed-position menu in Gradio. */
+ul.options,
+ul.options *,
+[role="option"],
+[role="option"] * {
+  color: #000000 !important;
+}
+input[role="listbox"] {
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
+}
+ul.options,
+ul.options .item,
+ul.options [role="option"] {
+  background-color: #ffffff !important;
+}
+ul.options .item:hover,
+ul.options .item.active,
+ul.options [role="option"]:hover,
+ul.options [role="option"][aria-selected="true"] {
+  background-color: #f0f0f0 !important;
 }
 .gradio-container .prose,
 .gradio-container .prose p,

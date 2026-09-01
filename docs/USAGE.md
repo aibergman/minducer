@@ -46,7 +46,13 @@ Paths are resolved relative to `inpsd.dat`. Canonical UppASD keywords are
 `posfile`, `momfile`, and `exchange`; `positions`, `moments`, and `jfile` are
 accepted as fallback aliases.
 
-`posfile` stores a basis-site number, atom type, and Cartesian position:
+`posfile` stores a basis-site number, atom type, and position. By default the
+three position values are Cartesian (`posfiletype C`). With `posfiletype D`,
+they are direct/fractional coordinates and are converted using the cell:
+
+```text
+posfiletype D
+```
 
 ```text
 # site atom_type x y z

@@ -41,6 +41,7 @@ class InpsdConfig:
     keywords: dict[str, list[str]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     alat: float | None = None
+    posfiletype: str = "C"
 
 
 @dataclass
@@ -75,7 +76,7 @@ class LoadedUppASD:
 
 _KNOWN_KEYWORDS = {
     "simid", "ncell", "bc", "posfile", "positions", "momfile", "moments", "exchange", "jfile",
-    "cell", "alat", "hamiltonian", "elements", "do", "temperature", "tstep",
+    "cell", "alat", "posfiletype", "hamiltonian", "elements", "do", "temperature", "tstep",
 }
 
 # These are the canonical file keywords.  Keep the older descriptive
@@ -143,6 +144,7 @@ def parse_inpsd(path: str | Path) -> InpsdConfig:
     warnings: list[str] = []
     cell: np.ndarray | None = None
     alat: float | None = None
+    posfiletype = "C"
     index = 0
     while index < len(lines):
         line_number = index + 1
@@ -164,6 +166,12 @@ def parse_inpsd(path: str | Path) -> InpsdConfig:
             if alat <= 0:
                 raise InputFormatError(f"{input_file}:{line_number}: alat must be positive")
             values[key] = tokens[1:]
+            continue
+        if key == "posfiletype":
+            if len(tokens) != 2 or tokens[1].upper() not in {"C", "D"}:
+                raise InputFormatError(f"{input_file}:{line_number}: posfiletype must be either C or D")
+            posfiletype = tokens[1].upper()
+            values[key] = [posfiletype]
             continue
         if key == "cell":
             rows: list[list[float]] = []
@@ -213,6 +221,7 @@ def parse_inpsd(path: str | Path) -> InpsdConfig:
         keywords=values,
         warnings=warnings,
         alat=alat,
+        posfiletype=posfiletype,
     )
 
 
@@ -229,10 +238,30 @@ def _rows(path: str | Path) -> Iterable[tuple[int, list[str]]]:
                 raise InputFormatError(f"{source}:{line_number}: {exc}") from exc
 
 
-def parse_posfile(path: str | Path) -> dict[int, PositionRecord]:
-    """Parse ``site atom_type x y z`` Cartesian position rows."""
+def parse_posfile(
+    path: str | Path,
+    *,
+    posfiletype: str = "C",
+    cell: np.ndarray | None = None,
+) -> dict[int, PositionRecord]:
+    """Parse ``site atom_type x y z`` position rows.
+
+    ``C`` interprets the coordinates as Cartesian.  ``D`` interprets them as
+    direct (fractional) coordinates and converts them using the direct-cell
+    vectors stored as rows of ``cell``.
+    """
 
     source = Path(path).expanduser().resolve()
+    normalized_type = str(posfiletype).upper()
+    if normalized_type not in {"C", "D"}:
+        raise InputFormatError(f"{source}: posfiletype must be either C or D")
+    direct_cell = None
+    if normalized_type == "D":
+        if cell is None:
+            raise InputFormatError(f"{source}: a 3x3 cell is required for posfiletype D")
+        direct_cell = np.asarray(cell, dtype=float)
+        if direct_cell.shape != (3, 3) or not np.isfinite(direct_cell).all():
+            raise InputFormatError(f"{source}: cell must be a finite 3x3 matrix for posfiletype D")
     records: dict[int, PositionRecord] = {}
     for line, tokens in _rows(source):
         if len(tokens) != 5:
@@ -240,8 +269,13 @@ def parse_posfile(path: str | Path) -> dict[int, PositionRecord]:
         site = _integer(tokens[0], path=source, line=line, field="site")
         if site in records:
             raise InputFormatError(f"{source}:{line}: duplicate site index {site}")
-        position = tuple(_float(token, path=source, line=line, field="position") for token in tokens[2:5])
-        records[site] = PositionRecord(site, _identifier(tokens[1]), position, line)
+        position = np.asarray(
+            [_float(token, path=source, line=line, field="position") for token in tokens[2:5]],
+            dtype=float,
+        )
+        if direct_cell is not None:
+            position = position @ direct_cell
+        records[site] = PositionRecord(site, _identifier(tokens[1]), tuple(float(value) for value in position), line)
     return records
 
 
@@ -321,7 +355,7 @@ def load_uppasd(
     report = ValidationReport()
     for warning in config.warnings:
         report.add_warning("unknown_keyword", warning, source=str(config.input_file))
-    positions = parse_posfile(config.posfile)
+    positions = parse_posfile(config.posfile, posfiletype=config.posfiletype, cell=config.cell)
     moments = parse_momfile(config.momfile)
     bonds = parse_exchange(config.exchange, strict=strict, report=report)
 

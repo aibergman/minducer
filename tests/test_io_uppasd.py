@@ -27,6 +27,7 @@ def write_input(tmp_path: Path, *, exchange: str = "1 1 0 0 0 1 0\n", pos: str =
 def test_loads_multiline_nonorthogonal_input_and_relative_paths(tmp_path: Path):
     loaded = load_uppasd(write_input(tmp_path))
     assert np.allclose(loaded.cell, [[1, 0, 0], [0.5, 1, 0], [0, 0, 2]])
+    assert loaded.config.posfiletype == "C"
     assert loaded.units.energy == "mRy"
     assert loaded.model.sites[0].moment == 2.0
     assert loaded.model.sites[0].spin_direction == (0.0, 0.0, 1.0)
@@ -73,6 +74,18 @@ def test_single_line_cell_is_supported(tmp_path: Path):
     inpsd.write_text(text)
     config = parse_inpsd(inpsd)
     assert config.cell.shape == (3, 3)
+
+
+def test_posfiletype_d_converts_direct_positions_using_the_cell(tmp_path: Path):
+    inpsd = write_input(tmp_path, pos="1 1 0.5 0.5 0.5\n")
+    inpsd.write_text("posfiletype D\n" + inpsd.read_text(), encoding="utf-8")
+
+    config = parse_inpsd(inpsd)
+    loaded = load_uppasd(inpsd)
+
+    assert config.posfiletype == "D"
+    assert np.allclose(loaded.model.sites[0].position, [0.75, 0.5, 1.0])
+    assert not any(issue.code == "unknown_keyword" for issue in loaded.report.issues)
 
 
 def test_legacy_file_keyword_aliases_remain_fallbacks(tmp_path: Path):

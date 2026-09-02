@@ -72,6 +72,12 @@ For maptypes 2 and 3, `ncell N1 N2 N3` and `BC P/F P/F P/F` optionally enable
 periodic offset reduction or free-boundary range checks. Cell vectors are rows
 and all mapped exchange vectors are stored as Cartesian vectors internally.
 
+The input readers consume the required leading fields and ignore trailing
+columns or text. This applies to recognized `inpsd.dat` records, `posfile`,
+`momfile`, and `jfile` rows. `inpsd.dat` keywords not used by this package are
+also silently ignored, so a deck may retain settings intended for other
+UppASD executables.
+
 `momfile` stores the reference moment in `mu_B`, optionally followed by a
 spin direction:
 

@@ -35,6 +35,64 @@ def test_loads_multiline_nonorthogonal_input_and_relative_paths(tmp_path: Path):
     assert loaded.report.pair_complete
 
 
+def test_unknown_inpsd_keywords_are_silently_ignored(tmp_path: Path):
+    inpsd = write_input(tmp_path)
+    inpsd.write_text("future_solver_keyword arbitrary trailing data\n" + inpsd.read_text(), encoding="utf-8")
+
+    config = parse_inpsd(inpsd)
+    loaded = load_uppasd(inpsd)
+
+    assert config.warnings == []
+    assert not any(issue.code == "unknown_keyword" for issue in loaded.report.issues)
+
+
+def test_input_readers_ignore_trailing_columns_and_text(tmp_path: Path):
+    inpsd = write_input(
+        tmp_path,
+        exchange="1 1 0 0 0 1 trailing distance text\n",
+        pos="1 1 0 0 0 trailing position text\n",
+        mom="1 1 2.0 0 0 1 trailing moment text\n",
+    )
+    inpsd.write_text(
+        "simid demo trailing text\n"
+        "alat 2.0 trailing text\n"
+        "posfiletype C trailing text\n"
+        "maptype 1 trailing text\n"
+        "ncell 2 3 4 trailing text\n"
+        "BC P F P trailing text\n"
+        "cell 1 0 0 trailing cell text\n"
+        "  0 1 0 trailing cell text\n"
+        "  0 0 1 trailing cell text\n"
+        "posfile posfile trailing path text\n"
+        "momfile momfile trailing path text\n"
+        "exchange jfile trailing path text\n",
+        encoding="utf-8",
+    )
+
+    loaded = load_uppasd(inpsd)
+
+    assert loaded.report.ok
+    assert loaded.config.alat == 2.0
+    assert loaded.config.ncell == (2, 3, 4)
+    assert loaded.config.bc == ("P", "F", "P")
+    assert len(loaded.model.sites) == 1
+    assert len(loaded.model.exchange_bonds) == 1
+    assert loaded.model.exchange_bonds[0].supplied_distance is None
+
+
+def test_single_line_cell_ignores_trailing_columns(tmp_path: Path):
+    inpsd = write_input(tmp_path)
+    inpsd.write_text(
+        "cell 1 0 0 0 1 0 0 0 1 trailing cell text\n"
+        + "posfile posfile\nmomfile momfile\nexchange jfile\n",
+        encoding="utf-8",
+    )
+
+    config = parse_inpsd(inpsd)
+
+    assert np.allclose(config.cell, np.eye(3))
+
+
 def test_distance_mismatch_is_a_structured_warning(tmp_path: Path):
     loaded = load_uppasd(write_input(tmp_path, exchange="1 1 1 0 0 3 99\n"))
     assert any(issue.code == "distance_mismatch" for issue in loaded.report.warnings)

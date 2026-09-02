@@ -168,21 +168,21 @@ def parse_inpsd(path: str | Path) -> InpsdConfig:
             continue
         key = tokens[0].lower()
         if key == "alat":
-            if len(tokens) != 2:
+            if len(tokens) < 2:
                 raise InputFormatError(f"{input_file}:{line_number}: alat must contain one numeric value in metres")
             alat = _float(tokens[1], path=input_file, line=line_number, field="alat")
             if alat <= 0:
                 raise InputFormatError(f"{input_file}:{line_number}: alat must be positive")
-            values[key] = tokens[1:]
+            values[key] = tokens[1:2]
             continue
         if key == "posfiletype":
-            if len(tokens) != 2 or tokens[1].upper() not in {"C", "D"}:
+            if len(tokens) < 2 or tokens[1].upper() not in {"C", "D"}:
                 raise InputFormatError(f"{input_file}:{line_number}: posfiletype must be either C or D")
             posfiletype = tokens[1].upper()
             values[key] = [posfiletype]
             continue
         if key == "maptype":
-            if len(tokens) != 2:
+            if len(tokens) < 2:
                 raise InputFormatError(f"{input_file}:{line_number}: maptype must contain one value (1, 2, or 3)")
             maptype = _integer(tokens[1], path=input_file, line=line_number, field="maptype")
             if maptype not in {1, 2, 3}:
@@ -190,19 +190,19 @@ def parse_inpsd(path: str | Path) -> InpsdConfig:
             values[key] = [str(maptype)]
             continue
         if key == "ncell":
-            if len(tokens) != 4:
+            if len(tokens) < 4:
                 raise InputFormatError(f"{input_file}:{line_number}: ncell must contain three positive integers")
-            ncell_values = tuple(_integer(token, path=input_file, line=line_number, field="ncell") for token in tokens[1:])
+            ncell_values = tuple(_integer(token, path=input_file, line=line_number, field="ncell") for token in tokens[1:4])
             if any(value <= 0 for value in ncell_values):
                 raise InputFormatError(f"{input_file}:{line_number}: ncell must contain three positive integers")
             ncell = ncell_values
-            values[key] = tokens[1:]
+            values[key] = tokens[1:4]
             continue
         if key == "bc":
-            if len(tokens) != 4:
+            if len(tokens) < 4:
                 raise InputFormatError(f"{input_file}:{line_number}: BC must contain three values (P or F)")
             aliases = {"P": "P", "PERIODIC": "P", "F": "F", "FREE": "F", "O": "F", "OPEN": "F"}
-            normalized_bc = tuple(token.upper() for token in tokens[1:])
+            normalized_bc = tuple(token.upper() for token in tokens[1:4])
             if any(value not in aliases for value in normalized_bc):
                 raise InputFormatError(f"{input_file}:{line_number}: BC values must be P or F")
             bc = tuple(aliases[value] for value in normalized_bc)  # type: ignore[assignment]
@@ -213,13 +213,12 @@ def parse_inpsd(path: str | Path) -> InpsdConfig:
             # UppASD examples commonly separate cell components with commas.
             # Commas are punctuation here, not part of the numeric value.
             first = [token.strip(",") for token in tokens[1:]]
-            if first:
-                if len(first) == 9 and all(_is_float(token) for token in first):
-                    cell = np.asarray([float(token) for token in first], dtype=float).reshape(3, 3)
-                    continue
-                if len(first) != 3 or not all(_is_float(token) for token in first):
-                    raise InputFormatError(f"{input_file}:{line_number}: cell must contain three numeric values per row")
-                rows.append([float(token) for token in first])
+            if len(first) >= 9 and all(_is_float(token) for token in first[:9]):
+                cell = np.asarray([float(token) for token in first[:9]], dtype=float).reshape(3, 3)
+                continue
+            if len(first) < 3 or not all(_is_float(token) for token in first[:3]):
+                raise InputFormatError(f"{input_file}:{line_number}: cell must contain three numeric values per row")
+            rows.append([float(token) for token in first[:3]])
             while len(rows) < 3:
                 if index >= len(lines):
                     raise InputFormatError(f"{input_file}:{line_number}: incomplete multiline cell")
@@ -229,14 +228,17 @@ def parse_inpsd(path: str | Path) -> InpsdConfig:
                 if not continuation:
                     continue
                 continuation_tokens = [token.strip(",") for token in shlex.split(continuation)]
-                if len(continuation_tokens) != 3 or not all(_is_float(token) for token in continuation_tokens):
+                if len(continuation_tokens) < 3 or not all(_is_float(token) for token in continuation_tokens[:3]):
                     raise InputFormatError(f"{input_file}:{continuation_number}: cell continuation must contain three numeric values")
-                rows.append([float(token) for token in continuation_tokens])
+                rows.append([float(token) for token in continuation_tokens[:3]])
             cell = np.asarray(rows, dtype=float)
             continue
-        values[key] = tokens[1:]
         if key not in _KNOWN_KEYWORDS:
-            warnings.append(f"{input_file}:{line_number}: ignored unknown UppASD keyword {tokens[0]!r}")
+            # UppASD decks are often shared across executables and contain
+            # keywords this reader does not need.  They are intentionally
+            # ignored without becoming validation noise.
+            continue
+        values[key] = tokens[1:]
 
     if cell is None:
         raise InputFormatError(f"{input_file}: missing cell")
@@ -302,7 +304,7 @@ def parse_posfile(
             raise InputFormatError(f"{source}: cell must be a finite 3x3 matrix for posfiletype D")
     records: dict[int, PositionRecord] = {}
     for line, tokens in _rows(source):
-        if len(tokens) != 5:
+        if len(tokens) < 5:
             raise InputFormatError(f"{source}:{line}: expected 5 columns: site atom_type x y z")
         site = _integer(tokens[0], path=source, line=line, field="site")
         if site in records:
@@ -328,14 +330,14 @@ def parse_momfile(path: str | Path) -> dict[int, MomentRecord]:
     source = Path(path).expanduser().resolve()
     records: dict[int, MomentRecord] = {}
     for line, tokens in _rows(source):
-        if len(tokens) not in (3, 6):
+        if len(tokens) < 3:
             raise InputFormatError(f"{source}:{line}: expected 3 or 6 columns: site atom_type moment [sx sy sz]")
         site = _integer(tokens[0], path=source, line=line, field="site")
         if site in records:
             raise InputFormatError(f"{source}:{line}: duplicate site index {site}")
         moment = _float(tokens[2], path=source, line=line, field="moment")
         direction = None
-        if len(tokens) == 6:
+        if len(tokens) >= 6 and all(_is_float(token) for token in tokens[3:6]):
             direction = tuple(_float(token, path=source, line=line, field="spin direction") for token in tokens[3:6])
         records[site] = MomentRecord(site, tokens[1], moment, direction, line)
     return records
@@ -353,13 +355,13 @@ def parse_exchange(path: str | Path, *, strict: bool = True, report: ValidationR
     bonds: list[ExchangeBond] = []
     for line, tokens in _rows(source):
         try:
-            if len(tokens) not in (6, 7):
+            if len(tokens) < 6:
                 raise InputFormatError(f"{source}:{line}: expected 6 or 7 columns: i j rx ry rz Jij [distance]")
             i = _integer(tokens[0], path=source, line=line, field="i")
             j = _integer(tokens[1], path=source, line=line, field="j")
             displacement = tuple(_float(token, path=source, line=line, field="displacement") for token in tokens[2:5])
             jij = _float(tokens[5], path=source, line=line, field="Jij")
-            supplied_distance = _float(tokens[6], path=source, line=line, field="distance") if len(tokens) == 7 else None
+            supplied_distance = _float(tokens[6], path=source, line=line, field="distance") if len(tokens) >= 7 and _is_float(tokens[6]) else None
             bond = ExchangeBond(i, j, displacement, jij, supplied_distance, line)
             if supplied_distance is not None and not np.isclose(supplied_distance, bond.distance, rtol=1e-6, atol=1e-8):
                 if report is not None:

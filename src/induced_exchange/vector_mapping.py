@@ -372,6 +372,14 @@ def _parse_float(token: str, *, source: Path, line: int, field: str) -> float:
     return value
 
 
+def _is_finite_float(token: str) -> bool:
+    try:
+        value = float(token)
+    except ValueError:
+        return False
+    return bool(np.isfinite(value))
+
+
 def _parse_int(token: str, *, source: Path, line: int, field: str) -> int:
     try:
         return int(token)
@@ -407,14 +415,21 @@ def read_jfile(
             continue
         tokens = line.split()
         try:
-            if len(tokens) not in {6, 7, 8, 9}:
+            if len(tokens) < 6:
                 raise VectorMappingError(
-                    f"{source}:{line_number}: expected 6/7 non-alloy or 8/9 random-alloy columns",
+                    f"{source}:{line_number}: expected at least 6 columns",
                     code="malformed_jfile_row",
                     source=source,
                     line=line_number,
                 )
-            random_alloy = len(tokens) in {8, 9}
+            # A normal jfile row is six required fields, optionally followed
+            # by a distance and/or arbitrary trailing data.  Random-alloy
+            # rows are recognized by their two non-numeric chemical fields;
+            # this avoids mistaking trailing text on a normal row for alloy
+            # metadata.
+            random_alloy = len(tokens) >= 8 and (
+                not _is_finite_float(tokens[2]) or not _is_finite_float(tokens[3])
+            )
             if random_alloy:
                 site_i = _parse_int(tokens[0], source=source, line=line_number, field="site_i")
                 site_j = _parse_int(tokens[1], source=source, line=line_number, field="site_j")
@@ -427,6 +442,13 @@ def read_jfile(
                 chemical_i = None
                 chemical_j = None
                 vector_start = 2
+            if len(tokens) < vector_start + 4:
+                raise VectorMappingError(
+                    f"{source}:{line_number}: incomplete exchange row",
+                    code="malformed_jfile_row",
+                    source=source,
+                    line=line_number,
+                )
             input_vector = tuple(
                 _parse_float(tokens[index], source=source, line=line_number, field="Rij")
                 for index in range(vector_start, vector_start + 3)
@@ -434,7 +456,7 @@ def read_jfile(
             Jij = _parse_float(tokens[vector_start + 3], source=source, line=line_number, field="Jij")
             supplied_distance = (
                 _parse_float(tokens[vector_start + 4], source=source, line=line_number, field="distance")
-                if len(tokens) == vector_start + 5
+                if len(tokens) > vector_start + 4 and _is_finite_float(tokens[vector_start + 4])
                 else None
             )
             rows.append(JFileRow(site_i, site_j, input_vector, Jij, supplied_distance, chemical_i, chemical_j, line_number))

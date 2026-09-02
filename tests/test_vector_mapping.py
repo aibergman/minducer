@@ -78,6 +78,24 @@ def test_duplicate_cartesian_vectors_use_the_last_jij(tmp_path: Path):
     assert records[0].Jij == 2.0
 
 
+def test_jfile_reader_ignores_trailing_columns_and_text(tmp_path: Path):
+    jfile = tmp_path / "jfile"
+    jfile.write_text("1 1 1 0 0 2 trailing columns and text\n", encoding="utf-8")
+
+    parsed = read_jfile(jfile)
+    mapped = map_exchange_file(
+        jfile,
+        positions=[(1, "Fe", 0.0, 0.0, 0.0)],
+        cell=np.eye(3),
+        maptype=1,
+    )
+
+    assert len(parsed) == 1
+    assert parsed[0].Jij == 2.0
+    assert mapped[0].Jij == 2.0
+    assert mapped[0].supplied_distance is None
+
+
 def test_periodic_offsets_are_reduced_and_free_offsets_are_rejected(tmp_path: Path):
     jfile = tmp_path / "jfile"
     jfile.write_text("1 1 2 0 0 1\n", encoding="utf-8")

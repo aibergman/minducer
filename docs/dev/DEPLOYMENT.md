@@ -11,7 +11,7 @@ Space configuration is the YAML block at the top of `README.md`; it selects
 gradio==5.50.0
 matplotlib>=3.7,<4
 numpy>=1.23,<3
-seekpath>=2.1,<3
+seekpath==2.1.0
 spglib>=2.0,<3
 ```
 

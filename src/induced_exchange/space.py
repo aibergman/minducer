@@ -454,7 +454,8 @@ def analyse_model(
     session = AnalysisSession(loaded, classification.robust_sites, classification.induced_sites, q_fractional, raw_fourier.q_cartesian, raw_fourier, raw_eigensystem, raw_order)
     session.path = path_data
     if selected_path.source != "seekpath":
-        session.warnings.append("seekpath was unavailable for this structure; the reciprocal plots use the transparent fallback path.")
+        detail = f" ({selected_path.fallback_reason})" if selected_path.fallback_reason else ""
+        session.warnings.append(f"seekpath was unavailable for this structure; the reciprocal plots use the transparent fallback path{detail}.")
     if not raw_fourier.hermiticity.is_hermitian:
         session.warnings.append("Input J(q) is not Hermitian on the selected q path; malformed or incomplete +/-R input was retained.")
 

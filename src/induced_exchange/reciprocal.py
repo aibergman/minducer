@@ -27,6 +27,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 import json
+import logging
 from typing import Any, Mapping, Sequence
 
 import numpy as np
@@ -35,6 +36,7 @@ from .model import MagneticCrystal, _cell_is_degenerate
 
 
 ArrayLike = Sequence[float] | np.ndarray
+_LOGGER = logging.getLogger(__name__)
 
 
 def _as_cell(cell: ArrayLike) -> np.ndarray:
@@ -491,6 +493,7 @@ class QPath:
     tick_positions: np.ndarray
     tick_labels: tuple[str, ...]
     source: str
+    fallback_reason: str | None = None
 
 
 def _path_from_vertices(
@@ -499,6 +502,7 @@ def _path_from_vertices(
     *,
     n_per_segment: int,
     source: str,
+    fallback_reason: str | None = None,
 ) -> QPath:
     if len(vertices) < 2:
         raise ValueError("a reciprocal path needs at least two vertices")
@@ -519,7 +523,7 @@ def _path_from_vertices(
     distance = np.zeros(len(points), dtype=float)
     if len(points) > 1:
         distance[1:] = np.cumsum(np.linalg.norm(np.diff(q_cartesian, axis=0), axis=1))
-    return QPath(q_fractional, q_cartesian, distance, np.asarray(ticks, dtype=int), labels, source)
+    return QPath(q_fractional, q_cartesian, distance, np.asarray(ticks, dtype=int), labels, source, fallback_reason)
 
 
 def _fallback_vertices() -> list[tuple[str, np.ndarray]]:
@@ -553,6 +557,7 @@ def high_symmetry_path(
     if points is not None:
         vertices = list(points.items()) if isinstance(points, Mapping) else list(points)
         return _path_from_vertices(lattice, vertices, n_per_segment=n_per_segment, source="explicit")
+    fallback_reason = None
     if use_seekpath and isinstance(model_or_cell, MagneticCrystal):
         try:
             import seekpath  # type: ignore
@@ -596,11 +601,20 @@ def high_symmetry_path(
                     vertices.append((start, np.asarray(point_coordinates[start], dtype=float)))
                 vertices.append((end, np.asarray(point_coordinates[end], dtype=float)))
             return _path_from_vertices(lattice, vertices, n_per_segment=n_per_segment, source="seekpath")
-        except Exception:
+        except Exception as exc:
             # Classification is optional.  The fallback remains explicit in
-            # the result so callers can report that it is not canonical.
-            pass
-    return _path_from_vertices(lattice, _fallback_vertices(), n_per_segment=n_per_segment, source="fallback")
+            # the result so callers can report that it is not canonical.  Keep
+            # the underlying reason visible for deployment diagnostics; this
+            # is especially useful when an older cached Seekpath is installed.
+            fallback_reason = f"{type(exc).__name__}: {exc}".strip()
+            _LOGGER.warning("Seekpath path unavailable; using fallback path: %s", fallback_reason)
+    return _path_from_vertices(
+        lattice,
+        _fallback_vertices(),
+        n_per_segment=n_per_segment,
+        source="fallback",
+        fallback_reason=fallback_reason,
+    )
 
 
 @dataclass(frozen=True)
@@ -618,6 +632,7 @@ class ExchangePathData:
             "tick_positions": self.path.tick_positions.tolist(),
             "tick_labels": list(self.path.tick_labels),
             "source": self.path.source,
+            "fallback_reason": self.path.fallback_reason,
             "eigenvalues_real": self.eigenvalues.real.tolist(),
             "eigenvalues_imag": self.eigenvalues.imag.tolist(),
             "eigenvectors_real": self.eigenvectors.real.tolist(),

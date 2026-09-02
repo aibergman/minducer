@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+
 import numpy as np
 
 from induced_exchange.model import ExchangeBond, MagneticCrystal, MagneticSite
@@ -147,6 +149,17 @@ def test_seekpath_path_stays_in_the_supplied_input_cell_basis():
     assert path.source == "seekpath"
     assert np.allclose(path.q_fractional[1], reference["point_coords"][first_segment_end])
     assert np.allclose(path.q_cartesian, reciprocal_lattice(cell).fractional_to_cartesian(path.q_fractional))
+
+
+def test_seekpath_fallback_reports_missing_original_cell_api(monkeypatch):
+    class OldSeekpath:
+        pass
+
+    monkeypatch.setitem(sys.modules, "seekpath", OldSeekpath())
+    path = high_symmetry_path(crystal(np.eye(3), []))
+
+    assert path.source == "fallback"
+    assert path.fallback_reason == "ImportError: installed seekpath has no original-cell API"
 
 
 def test_empty_q_set_has_a_structured_empty_result():

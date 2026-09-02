@@ -2,7 +2,8 @@
 
 Exchange values are read literally from the jfile.  A pair-complete file is
 interpreted with the ordered-pair Hamiltonian ``H=-sum_(i!=j) Jij e_i.e_j``;
-the loader never applies a factor-of-two conversion.
+the loader never applies a factor-of-two conversion.  Jfile vectors are mapped
+through :mod:`induced_exchange.vector_mapping` according to ``maptype``.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from .model import (
     validate_model,
 )
 from .symmetry import SymmetryExpansionError, SymmetryExpansionReport, expand_exchange_symmetry
+from .vector_mapping import VectorMappingError, map_exchange_file, prepare_positions
 
 
 class InputFormatError(ValueError):
@@ -42,6 +44,9 @@ class InpsdConfig:
     warnings: list[str] = field(default_factory=list)
     alat: float | None = None
     posfiletype: str = "C"
+    maptype: int = 1
+    ncell: tuple[int, int, int] | None = None
+    bc: tuple[str, str, str] | None = None
 
 
 @dataclass
@@ -76,7 +81,7 @@ class LoadedUppASD:
 
 _KNOWN_KEYWORDS = {
     "simid", "ncell", "bc", "posfile", "positions", "momfile", "moments", "exchange", "jfile",
-    "cell", "alat", "posfiletype", "hamiltonian", "elements", "do", "temperature", "tstep",
+    "cell", "alat", "posfiletype", "maptype", "hamiltonian", "elements", "do", "temperature", "tstep",
 }
 
 # These are the canonical file keywords.  Keep the older descriptive
@@ -145,6 +150,9 @@ def parse_inpsd(path: str | Path) -> InpsdConfig:
     cell: np.ndarray | None = None
     alat: float | None = None
     posfiletype = "C"
+    maptype = 1
+    ncell: tuple[int, int, int] | None = None
+    bc: tuple[str, str, str] | None = None
     index = 0
     while index < len(lines):
         line_number = index + 1
@@ -172,6 +180,33 @@ def parse_inpsd(path: str | Path) -> InpsdConfig:
                 raise InputFormatError(f"{input_file}:{line_number}: posfiletype must be either C or D")
             posfiletype = tokens[1].upper()
             values[key] = [posfiletype]
+            continue
+        if key == "maptype":
+            if len(tokens) != 2:
+                raise InputFormatError(f"{input_file}:{line_number}: maptype must contain one value (1, 2, or 3)")
+            maptype = _integer(tokens[1], path=input_file, line=line_number, field="maptype")
+            if maptype not in {1, 2, 3}:
+                raise InputFormatError(f"{input_file}:{line_number}: maptype must be 1, 2, or 3")
+            values[key] = [str(maptype)]
+            continue
+        if key == "ncell":
+            if len(tokens) != 4:
+                raise InputFormatError(f"{input_file}:{line_number}: ncell must contain three positive integers")
+            ncell_values = tuple(_integer(token, path=input_file, line=line_number, field="ncell") for token in tokens[1:])
+            if any(value <= 0 for value in ncell_values):
+                raise InputFormatError(f"{input_file}:{line_number}: ncell must contain three positive integers")
+            ncell = ncell_values
+            values[key] = tokens[1:]
+            continue
+        if key == "bc":
+            if len(tokens) != 4:
+                raise InputFormatError(f"{input_file}:{line_number}: BC must contain three values (P or F)")
+            aliases = {"P": "P", "PERIODIC": "P", "F": "F", "FREE": "F", "O": "F", "OPEN": "F"}
+            normalized_bc = tuple(token.upper() for token in tokens[1:])
+            if any(value not in aliases for value in normalized_bc):
+                raise InputFormatError(f"{input_file}:{line_number}: BC values must be P or F")
+            bc = tuple(aliases[value] for value in normalized_bc)  # type: ignore[assignment]
+            values[key] = list(bc)
             continue
         if key == "cell":
             rows: list[list[float]] = []
@@ -222,6 +257,9 @@ def parse_inpsd(path: str | Path) -> InpsdConfig:
         warnings=warnings,
         alat=alat,
         posfiletype=posfiletype,
+        maptype=maptype,
+        ncell=ncell,
+        bc=bc,
     )
 
 
@@ -357,7 +395,50 @@ def load_uppasd(
         report.add_warning("unknown_keyword", warning, source=str(config.input_file))
     positions = parse_posfile(config.posfile, posfiletype=config.posfiletype, cell=config.cell)
     moments = parse_momfile(config.momfile)
-    bonds = parse_exchange(config.exchange, strict=strict, report=report)
+    mapping_errors: list[VectorMappingError] = []
+    mapped_rows = map_exchange_file(
+        config.exchange,
+        cell=config.cell,
+        positions=prepare_positions(positions, config.cell),
+        maptype=config.maptype,
+        posfiletype=config.posfiletype,
+        ncell=config.ncell,
+        bc=config.bc,
+        strict=strict,
+        deduplicate=False,
+        errors=mapping_errors,
+    )
+    for error in mapping_errors:
+        report.add_error(
+            error.code,
+            str(error),
+            source=error.source or str(config.exchange),
+            line=error.line,
+        )
+    bonds: list[ExchangeBond] = []
+    for row in mapped_rows:
+        if row.supplied_distance is not None and not np.isclose(
+            row.supplied_distance,
+            row.distance,
+            rtol=1e-6,
+            atol=1e-8,
+        ):
+            report.add_warning(
+                "distance_mismatch",
+                f"optional distance {row.supplied_distance:g} disagrees with mapped vector norm {row.distance:g}",
+                source=str(config.exchange),
+                line=row.source_line,
+            )
+        bonds.append(
+            ExchangeBond(
+                row.site_i,
+                row.site_j,
+                row.rij_cart,
+                row.Jij,
+                row.supplied_distance,
+                row.source_line,
+            )
+        )
 
     for site in sorted(set(positions) - set(moments)):
         report.add_error("missing_moment", f"site {site} appears in posfile but not momfile", source=str(config.momfile))

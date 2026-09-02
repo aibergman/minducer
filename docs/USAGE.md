@@ -59,6 +59,19 @@ posfiletype D
 1 1 0.0 0.0 0.0
 ```
 
+The `jfile` vector convention is selected with `maptype` (default `1`):
+
+- `maptype 1`: the vector is already a bond vector; it is Cartesian for
+  `posfiletype C` and direct/fractional for `posfiletype D`.
+- `maptype 2`: the vector contains lattice-translation coefficients and the
+  folded basis-position difference is added.
+- `maptype 3`: the vector contains lattice-translation coefficients and the
+  raw, pre-folded basis-position difference is added.
+
+For maptypes 2 and 3, `ncell N1 N2 N3` and `BC P/F P/F P/F` optionally enable
+periodic offset reduction or free-boundary range checks. Cell vectors are rows
+and all mapped exchange vectors are stored as Cartesian vectors internally.
+
 `momfile` stores the reference moment in `mu_B`, optionally followed by a
 spin direction:
 

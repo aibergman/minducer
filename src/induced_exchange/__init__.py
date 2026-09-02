@@ -97,6 +97,18 @@ from .conventions import (
     uppasd_exchange_energy,
 )
 from .symmetry import SymmetryExpansionError, SymmetryExpansionReport, SymmetryExpansionResult, expand_exchange_symmetry
+from .vector_mapping import (
+    JFileRow,
+    MappedExchangeRecord,
+    PreparedPositions,
+    TargetCellMatch,
+    VectorMappingError,
+    infer_target_site,
+    map_exchange_file,
+    map_exchange_vector,
+    prepare_positions,
+    read_jfile,
+)
 from .provenance import HAMILTONIAN_CONVENTION, HAMILTONIAN_FORMULA, K_APPROXIMATION, build_analysis_provenance
 from .comparison import (
     DatasetAnalysis,
@@ -210,6 +222,16 @@ __all__ = [
     "SymmetryExpansionReport",
     "SymmetryExpansionResult",
     "expand_exchange_symmetry",
+    "JFileRow",
+    "MappedExchangeRecord",
+    "PreparedPositions",
+    "TargetCellMatch",
+    "VectorMappingError",
+    "infer_target_site",
+    "map_exchange_file",
+    "map_exchange_vector",
+    "prepare_positions",
+    "read_jfile",
     "HAMILTONIAN_CONVENTION",
     "HAMILTONIAN_FORMULA",
     "K_APPROXIMATION",

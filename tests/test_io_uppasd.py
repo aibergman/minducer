@@ -88,6 +88,25 @@ def test_posfiletype_d_converts_direct_positions_using_the_cell(tmp_path: Path):
     assert not any(issue.code == "unknown_keyword" for issue in loaded.report.issues)
 
 
+def test_maptype_and_supercell_keywords_are_parsed_and_applied(tmp_path: Path):
+    inpsd = write_input(tmp_path, exchange="1 1 1 0 0 4\n")
+    inpsd.write_text(
+        "maptype 2\n"
+        "ncell 2 3 4\n"
+        "BC P F P\n"
+        + inpsd.read_text(),
+        encoding="utf-8",
+    )
+
+    config = parse_inpsd(inpsd)
+    loaded = load_uppasd(inpsd)
+
+    assert config.maptype == 2
+    assert config.ncell == (2, 3, 4)
+    assert config.bc == ("P", "F", "P")
+    assert np.allclose(loaded.model.exchange_bonds[0].displacement, [1, 0, 0])
+
+
 def test_legacy_file_keyword_aliases_remain_fallbacks(tmp_path: Path):
     (tmp_path / "positions").write_text("1 1 0 0 0\n")
     (tmp_path / "moments").write_text("1 1 2.0 0 0 1\n")

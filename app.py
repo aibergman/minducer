@@ -91,6 +91,12 @@ input[role="listbox"] {
   color: #000000 !important;
   -webkit-text-fill-color: #000000 !important;
 }
+.imx-light-field input[type="number"],
+.imx-light-field .gradio-dropdown input,
+.imx-light-field input[role="listbox"] {
+  color: #000000 !important;
+  -webkit-text-fill-color: #000000 !important;
+}
 ul.options,
 ul.options .item,
 ul.options [role="option"] {
@@ -233,15 +239,15 @@ def build_demo():
                     load_button = gr.Button("Load input set", variant="primary")
                 mapping_table = gr.Dataframe(headers=["reference", "uploaded basename", "status"], datatype=["str", "str", "str"], row_count=1, label="Referenced-file mapping", interactive=False)
                 with gr.Row():
-                    manual_pos = gr.Dropdown([], label="Manual posfile assignment", allow_custom_value=False)
-                    manual_mom = gr.Dropdown([], label="Manual momfile assignment", allow_custom_value=False)
-                    manual_exchange = gr.Dropdown([], label="Manual exchange assignment", allow_custom_value=False)
+                    manual_pos = gr.Dropdown([], label="Manual posfile assignment", allow_custom_value=False, elem_classes=["imx-light-field"])
+                    manual_mom = gr.Dropdown([], label="Manual momfile assignment", allow_custom_value=False, elem_classes=["imx-light-field"])
+                    manual_exchange = gr.Dropdown([], label="Manual exchange assignment", allow_custom_value=False, elem_classes=["imx-light-field"])
                 load_status = gr.Markdown()
                 parsed_summary = gr.Markdown()
                 classification = gr.Dataframe(headers=["site", "atom_type", "moment (mu_B)", "role"], datatype=["number", "str", "number", "str"], type="array", row_count=1, label="Role preview (default: m < 0.5 μB is induced)", interactive=False)
                 induced_site_toggle = gr.CheckboxGroup(choices=[], value=[], label="Induced sites (toggle)", info="Select induced sites explicitly. By default, sites with reference moment m < 0.5 μB are selected; all other sites are robust.")
                 with gr.Row():
-                    mesh_size = gr.Slider(4, 16, value=8, step=1, label="Seekpath points per segment", info="The exchange, response, dressed-exchange, and magnon plots use this high-symmetry path. The same value controls the auxiliary 3-D mesh used only for J_eff(r).")
+                    mesh_size = gr.Slider(4, 16, value=8, step=1, label="Seekpath points per segment", info="The exchange, response, dressed-exchange, and magnon plots use this high-symmetry path. The same value controls the auxiliary 3-D mesh used only for J_eff(r).", elem_classes=["imx-light-field"])
                     analyze_button = gr.Button("Run analysis", variant="primary")
 
             with gr.Tab("2 · Raw exchange"):

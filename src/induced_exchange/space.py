@@ -17,7 +17,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
 
-from .downfolding import DressedExchangeRealSpace, DownfoldingResult, InducedExchangeDownfolding, inverse_fourier_dressed_jij, write_uppasd_jfile
+from .downfolding import DressedExchangeRealSpace, DownfoldingResult, InducedExchangeDownfolding, _minimum_mesh_for_displacements, inverse_fourier_dressed_jij, write_uppasd_jfile
 from .induced import InducedMomentResponse, InducedResponseResult, SublatticeClassification, XInferenceResult
 from .io_uppasd import InputFormatError, LoadedUppASD, load_uppasd, parse_inpsd
 from .magnons import FMSpinWaveResult, SpinStiffnessResult, fit_spin_stiffness, fm_magnon_spectrum
@@ -489,9 +489,22 @@ def analyse_model(
         if session.downfolding is not None:
             # A high-symmetry line does not provide a unique inverse Fourier
             # transform.  Use the user-selected resolution for a separate,
-            # controlled auxiliary mesh and label the result accordingly.
+            # controlled auxiliary mesh and label the result accordingly.  A
+            # small user-facing mesh is not allowed to alias the finite input
+            # exchange range onto its opposite boundary.
             try:
-                realspace_q = regular_q_mesh(model, (size, size, size), coordinates="fractional")
+                requested_mesh = (size, size, size)
+                required_mesh = _minimum_mesh_for_displacements(
+                    model.cell,
+                    np.asarray(session.downfolding.source_displacements, dtype=float),
+                )
+                realspace_mesh = tuple(max(requested, required) for requested, required in zip(requested_mesh, required_mesh))
+                if realspace_mesh != requested_mesh:
+                    session.warnings.append(
+                        "auxiliary real-space q mesh increased from "
+                        f"{requested_mesh} to {realspace_mesh} to resolve the mapped robust exchange range"
+                    )
+                realspace_q = regular_q_mesh(model, realspace_mesh, coordinates="fractional")
                 realspace_downfolding = InducedExchangeDownfolding(response).evaluate(realspace_q, coordinates="fractional")
                 session.dressed_real_space = inverse_fourier_dressed_jij(realspace_downfolding)
                 session.warnings.extend(realspace_downfolding.warnings)

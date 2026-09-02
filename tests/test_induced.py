@@ -10,6 +10,7 @@ from induced_exchange import (
     SublatticeClassification,
     instantaneous_induced_moments,
     reciprocal_lattice,
+    regular_q_mesh,
 )
 from induced_exchange.downfolding import InducedExchangeDownfolding, inverse_fourier_dressed_jij
 from induced_exchange.io_uppasd import load_uppasd
@@ -274,3 +275,25 @@ def test_ordering_diagnostic_and_inverse_transform_are_explicit_about_sampling()
     assert real_space.delta_values is not None
     assert real_space.shell_diagnostics[0]["dressed_max_abs"] == 2.0
     assert any("finite-q reconstructions" in warning for warning in real_space.warnings)
+
+
+def test_inverse_default_support_is_robust_block_and_flags_small_mesh_aliasing():
+    model = crystal(
+        [site(1, 1.0), site(2, 1.0, position=(0.5, 0.0, 0.0))],
+        [
+            ExchangeBond(1, 1, (2, 0, 0), 0.1),
+            ExchangeBond(1, 1, (-2, 0, 0), 0.1),
+            ExchangeBond(1, 2, (0.5, 0, 0), 3.0),
+            ExchangeBond(2, 1, (0.5, 0, 0), 3.0),
+        ],
+    )
+    response = InducedMomentResponse(model, [1], [2], x=0.0)
+    result = InducedExchangeDownfolding(response).evaluate(
+        regular_q_mesh(model, (4, 4, 4), coordinates="fractional"),
+        coordinates="fractional",
+    )
+
+    assert set(result.source_displacements) == {(2.0, 0.0, 0.0), (-2.0, 0.0, 0.0)}
+    real_space = inverse_fourier_dressed_jij(result)
+    assert any("q mesh is too small" in warning for warning in real_space.warnings)
+    assert not any(np.allclose(displacement, (0.5, 0.0, 0.0)) for displacement in real_space.displacements)

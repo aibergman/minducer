@@ -114,6 +114,7 @@ class DownfoldingResult:
     dressed_hermiticity: HermiticityReport
     warnings: tuple[str, ...] = ()
     source_displacements: tuple[tuple[float, float, float], ...] = ()
+    source_cell: np.ndarray | None = None
 
     @property
     def J_raw(self) -> np.ndarray:
@@ -398,18 +399,26 @@ class InducedExchangeDownfolding:
         if np.any(solve_failed):
             delta[solve_failed] = np.nan + 0j
             dressed[solve_failed] = np.nan + 0j
-        # The input displacement support is also the safest default support
-        # for a native jfile export.  It includes cross-only models where the
-        # robust block has no direct real-space row; the inverse transform is
-        # still explicitly labelled as a finite reconstruction.
+        # A matrix element J_ab(q) has a pair-specific basis-position phase.
+        # Therefore a physical displacement from a cross or induced-induced
+        # row is not a valid sampling point for the robust-robust element.
+        # Mixing those supports in one inverse transform creates artificial
+        # long-range coefficients (especially on a small q mesh).
+        robust_set = set(self.robust_sites)
+        robust_bonds = [
+            bond
+            for bond in self.response.model.exchange_bonds
+            if bond.i in robust_set and bond.j in robust_set
+        ]
+        source_bonds = robust_bonds or self.response.model.exchange_bonds
         source_displacements = tuple(
-            sorted(
-                {
-                    tuple(float(value) for value in bond.displacement)
-                    for bond in self.response.model.exchange_bonds
-                }
-            )
+            sorted({tuple(float(value) for value in bond.displacement) for bond in source_bonds})
         )
+        if not robust_bonds and self.response.model.exchange_bonds:
+            warnings.append(
+                "no direct robust-robust exchange rows were found; the default real-space support "
+                "uses the full input displacement set and is only a provisional reconstruction"
+            )
         return DownfoldingResult(
             q_fractional=q_fractional,
             q_cartesian=q_cartesian,
@@ -430,6 +439,7 @@ class InducedExchangeDownfolding:
             dressed_hermiticity=check_hermiticity(dressed),
             warnings=tuple(dict.fromkeys(warnings)),
             source_displacements=source_displacements,
+            source_cell=self.response.model.cell.copy(),
         )
 
     downfold = evaluate
@@ -567,10 +577,17 @@ def inverse_fourier_dressed_jij(
     values = np.einsum("qij,qd->dij", result.dressed, phases) / len(result.q_cartesian)
     raw_values = np.einsum("qij,qd->dij", result.raw_robust, phases) / len(result.q_cartesian)
     delta_values = np.einsum("qij,qd->dij", result.delta_induced, phases) / len(result.q_cartesian)
-    cross_values = np.einsum("qij,qd->dij", result.k_rm, phases) / len(result.q_cartesian)
     warnings = [
         "inverse-transformed dressed Jij are finite-q reconstructions, not unique real-space interactions outside the sampled resolution",
     ]
+    # The default displacement support belongs to the robust-robust block.
+    # K_RM has a different basis phase, so reporting it on that same support
+    # would manufacture a translated cross interaction.  Keep the legacy
+    # explicit-displacement behaviour for callers that deliberately provide a
+    # pair-compatible support, but omit it from the safe default/UI result.
+    cross_values = None if displacements is None else np.einsum("qij,qd->dij", result.k_rm, phases) / len(result.q_cartesian)
+    if displacements is None and result.induced_sites:
+        warnings.append("cross-block real-space values omitted from the default support because their basis phase differs")
     q_fractional = result.q_fractional
     if len(q_fractional) < 2:
         warnings.append("one q point cannot resolve a real-space range")
@@ -580,6 +597,19 @@ def inverse_fourier_dressed_jij(
             warnings.append("q points do not form a complete Cartesian reciprocal mesh; aliasing/truncation cannot be controlled")
         elif any(count < 2 for count in unique_counts):
             warnings.append("at least one reciprocal direction is sampled only once; real-space range is unresolved along that direction")
+        elif result.source_cell is not None:
+            required = _minimum_mesh_for_displacements(result.source_cell, displacements_array)
+            undersampled = [
+                (axis, count, needed)
+                for axis, (count, needed) in enumerate(zip(unique_counts, required))
+                if count < needed
+            ]
+            if undersampled:
+                details = ", ".join(f"axis {axis}: {count} < {needed}" for axis, count, needed in undersampled)
+                warnings.append(
+                    "q mesh is too small to resolve the requested displacement support "
+                    f"({details}); long-range values are aliased"
+                )
     return DressedExchangeRealSpace(
         displacements=displacements_array,
         values=values,
@@ -591,6 +621,32 @@ def inverse_fourier_dressed_jij(
         cross_values=cross_values,
         induced_site_indices=result.induced_sites,
     )
+
+
+def _minimum_mesh_for_displacements(
+    cell: np.ndarray,
+    displacements: np.ndarray,
+) -> tuple[int, int, int]:
+    """Return conservative regular-mesh divisions for a displacement set.
+
+    A regular reciprocal mesh identifies real-space translations modulo its
+    division count.  The required count is therefore one larger than the
+    span of the displacement coordinates in lattice units.  The extra point
+    prevents the two ends of a finite input range from wrapping onto each
+    other.
+    """
+
+    values = np.asarray(displacements, dtype=float)
+    if values.size == 0:
+        return (2, 2, 2)
+    if values.ndim != 2 or values.shape[1] != 3:
+        raise ValueError("displacements must have shape (n, 3)")
+    fractional = values @ np.linalg.inv(np.asarray(cell, dtype=float))
+    spans = np.ptp(fractional, axis=0)
+    # Mapping through a non-orthogonal cell can leave an integer span a few
+    # ulps above its exact value.  Treat such values as the corresponding
+    # integer range; otherwise use the conservative ceiling.
+    return tuple(max(2, int(np.ceil(float(span) - 1.0e-7)) + 1) for span in spans)
 
 
 def write_uppasd_jfile(

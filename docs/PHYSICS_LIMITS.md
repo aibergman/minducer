@@ -51,8 +51,8 @@ shown separately when needed.
 and the q plot shows its leading eigenvalue. A high-symmetry line cannot
 uniquely determine `J_eff(r)`, so the Space performs that optional real-space
 reconstruction from a separate complete auxiliary mesh. The Dressed exchange
-tab displays shell-averaged `J_MM(r)`, the cross block `J_Mm(r) = K_Mm(r)`, and
-separate Mryasov and Polesya labels for the numerically equivalent effective
+tab displays shell-averaged `J_MM(r)` on the robust--robust displacement
+support, and separate Mryasov and Polesya labels for the numerically equivalent effective
 curves; `Delta J_induced(r)` and its ratio to the direct `J_MM(r)` are shown in
 separate plots. Real-space plot distances are expressed in the implicit
 `alat = 1` convention (physical values are divided by the input `alat`). The resulting
@@ -62,6 +62,14 @@ labelled companion `J_eff(r)/m_R`, which is the q-dependent exchange scale in
 the one-site moment-normalized FM dynamical matrix. This companion is not a
 replacement for the spin-Hamiltonian `J_eff(r)` and is not generalized to a
 scalar when several robust sublattices remain.
+
+The inverse transform is pair-phase sensitive: a cross-sublattice physical
+displacement cannot be used as a sample location for `J_MM(r)`. The default
+support therefore excludes cross and induced--induced input rows, and omits
+the cross block from that same-grid real-space display. The
+auxiliary mesh is increased automatically when the requested mesh would wrap
+the finite mapped exchange range onto itself; direct library calls report the
+same condition as an aliasing warning.
 
 ## Input-cell requirement
 

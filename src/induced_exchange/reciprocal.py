@@ -544,7 +544,9 @@ def high_symmetry_path(
     Explicit ``points`` are reduced reciprocal coordinates and always take
     precedence.  If seekpath is unavailable or cannot classify the structure,
     a transparent generic Gamma--boundary--Gamma path is returned with
-    ``source='fallback'``.
+    ``source='fallback'``.  Seekpath's standardized path is mapped back to the
+    supplied input cell before it is sampled; the model cell is never replaced
+    by Seekpath's conventional cell.
     """
 
     lattice = _lattice_for(model_or_cell)
@@ -577,16 +579,22 @@ def high_symmetry_path(
                 scaled_positions,
                 numbers,
             )
-            path_data = seekpath.get_path(structure)
+            # ``get_path`` returns reduced coordinates in Seekpath's
+            # standardized primitive reciprocal basis.  UppASD keeps the
+            # supplied cell unchanged, so using those coordinates directly (or
+            # converting them without Seekpath's rotation matrix) designates a
+            # different physical path.  The original-cell API performs the
+            # complete basis/orientation transformation for us.
+            get_path_orig_cell = getattr(seekpath, "get_path_orig_cell", None)
+            if get_path_orig_cell is None:
+                raise ImportError("installed seekpath has no original-cell API")
+            path_data = get_path_orig_cell(structure)
             point_coordinates = path_data["point_coords"]
-            primitive_reciprocal = np.asarray(path_data["reciprocal_primitive_lattice"], dtype=float) / cell_scale
             vertices = []
             for start, end in path_data["path"]:
                 if not vertices or vertices[-1][0] != start:
-                    start_cartesian = np.asarray(point_coordinates[start], dtype=float) @ primitive_reciprocal
-                    vertices.append((start, lattice.cartesian_to_fractional(start_cartesian)))
-                end_cartesian = np.asarray(point_coordinates[end], dtype=float) @ primitive_reciprocal
-                vertices.append((end, lattice.cartesian_to_fractional(end_cartesian)))
+                    vertices.append((start, np.asarray(point_coordinates[start], dtype=float)))
+                vertices.append((end, np.asarray(point_coordinates[end], dtype=float)))
             return _path_from_vertices(lattice, vertices, n_per_segment=n_per_segment, source="seekpath")
         except Exception:
             # Classification is optional.  The fallback remains explicit in

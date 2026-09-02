@@ -123,6 +123,32 @@ def test_seekpath_maps_named_atom_types_to_species_numbers():
     assert "X" in path.tick_labels
 
 
+def test_seekpath_path_stays_in_the_supplied_input_cell_basis():
+    import seekpath
+
+    # This is the oblique in-plane cell used by the L10 UppASD test deck.
+    # Seekpath standardizes it to an orthogonal conventional cell, so using
+    # get_path() coordinates directly produces a visibly different path.
+    cell = np.array([[1.0, 0.0, 0.0], [0.5, 0.5, 0.0], [0.0, 0.0, 0.984]])
+    scaled_positions = np.array([[0.0, 0.0, 0.0], [0.5, 0.0, 0.5]])
+    model = MagneticCrystal(
+        cell=cell,
+        sites=[
+            MagneticSite(index=1, atom_type="Fe", position=tuple(scaled_positions[0] @ cell), moment=1.0),
+            MagneticSite(index=2, atom_type="Pt", position=tuple(scaled_positions[1] @ cell), moment=1.0),
+        ],
+        exchange_bonds=[],
+    )
+
+    reference = seekpath.get_path_orig_cell((cell, scaled_positions, [1, 2]))
+    path = high_symmetry_path(model, n_per_segment=1)
+
+    first_segment_end = reference["path"][0][1]
+    assert path.source == "seekpath"
+    assert np.allclose(path.q_fractional[1], reference["point_coords"][first_segment_end])
+    assert np.allclose(path.q_cartesian, reciprocal_lattice(cell).fractional_to_cartesian(path.q_fractional))
+
+
 def test_empty_q_set_has_a_structured_empty_result():
     model = crystal(np.eye(3), [])
     result = exchange_fourier(model, np.empty((0, 3)), coordinates="fractional")

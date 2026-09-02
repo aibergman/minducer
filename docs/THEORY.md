@@ -55,9 +55,12 @@ Hamiltonian convention above. If the matrix is non-Hermitian because input is
 incomplete or asymmetric, the result is marked as a diagnostic rather than a
 certified physical spectrum.
 
-The application displays a seekpath high-symmetry line when available. An
-ordering candidate on that line is not a global three-dimensional ordering
-search. Use `regular_q_mesh` with the library API for a full mesh calculation.
+The application displays a seekpath high-symmetry line when available. The
+symmetry path is transformed back to the supplied input-cell basis, because
+UppASD keeps that cell unchanged rather than adopting Seekpath's standardized
+conventional cell. An ordering candidate on that line is not a global
+three-dimensional ordering search. Use `regular_q_mesh` with the library API
+for a full mesh calculation.
 
 ## Induced moments
 
